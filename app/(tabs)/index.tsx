@@ -10,198 +10,150 @@ import {
   Alert,
   TouchableOpacity,
   Image,
-  ActivityIndicator, // Loader indicator
+  ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { ref, push, onValue, update } from "firebase/database";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
-import { database, storage } from "../../services/firebase.js"; // Firebase configuration
+import { firestoreDB, storage, auth } from "../../services/firebase";
 import { useRouter } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function NoteTakingApp() {
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState([]);
   const [image, setImage] = useState(null);
-  const [imageSelected, setImageSelected] = useState(false); // To indicate image selection
-  const [uploading, setUploading] = useState(false); // For showing loader
+  const [imageSelected, setImageSelected] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const router = useRouter();
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
-    loadNotes();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+        loadNotes(user.uid);
+      } else {
+        router.push("/login/LoginScreen");
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   async function takeImage() {
-    try {
-      const permissionResult =
-        await ImagePicker.requestCameraPermissionsAsync();
-      if (permissionResult.granted === false) {
-        Alert.alert(
-          "Permission required",
-          "Permission to access the camera is required!"
-        );
-        return;
-      }
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert("Permission to access camera is required!");
+      return;
+    }
 
-      let cameraResult = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 1,
-      });
+    const cameraResult = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
+    });
 
-      console.log("Camera result:", cameraResult);
-
-      if (
-        !cameraResult.canceled &&
-        cameraResult.assets &&
-        cameraResult.assets[0].uri
-      ) {
-        setImage(cameraResult.assets[0].uri);
-        setImageSelected(true);
-        console.log("Image taken:", cameraResult.assets[0].uri);
-      } else {
-        console.log("Camera was canceled or no valid image URI found.");
-      }
-    } catch (error) {
-      console.error("Error taking image:", error.message);
-      Alert.alert("Error", "Failed to take photo");
+    if (!cameraResult.canceled && cameraResult.assets[0].uri) {
+      setImage(cameraResult.assets[0].uri);
+      setImageSelected(true);
     }
   }
 
-  // Pick and create an image from gallery and store it in expo before uploading to firebase
   async function pickImage() {
-    try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (permissionResult.granted === false) {
-        Alert.alert(
-          "Permission required",
-          "Permission to access gallery is required!"
-        );
-        return;
-      }
-      // Restrict to images only
-      let pickerResult = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 1,
-      });
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert("Permission to access gallery is required!");
+      return;
+    }
 
-      // Log the picker result to debug
-      console.log("Picker result:", pickerResult);
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
+    });
 
-      if (
-        !pickerResult.canceled &&
-        pickerResult.assets &&
-        pickerResult.assets[0].uri
-      ) {
-        // Extract image URI properly
-        setImage(pickerResult.assets[0].uri);
-        // Set image selected to true
-        setImageSelected(true);
-        console.log("Image picked:", pickerResult.assets[0].uri);
-      } else {
-        console.log("Image picker was canceled or no valid image URI found.");
-      }
-    } catch (error) {
-      console.error("Error picking image:", error.message);
-      Alert.alert("Error", "Failed to pick image");
+    if (!pickerResult.canceled && pickerResult.assets[0].uri) {
+      setImage(pickerResult.assets[0].uri);
+      setImageSelected(true);
     }
   }
 
-  // Upload image to Firebase Storage
-  async function uploadImage(noteKey) {
-    try {
-      if (!image) {
-        console.error("No image selected for upload.");
-        return null;
-      }
-      // showing loader
-      setUploading(true);
-      console.log("Uploading image...");
-      const imgRef = storageRef(storage, `notes/${noteKey}.jpg`);
-      // Testing URI is valid and fetchable
-      const response = await fetch(image);
-      const blob = await response.blob();
+  async function uploadImage(noteId) {
+    if (!image) return null;
+    setUploading(true);
 
-      // Upload the image to Firebase Storage
-      await uploadBytes(imgRef, blob);
+    const imgRef = storageRef(storage, `notes/${noteId}.jpg`);
+    const response = await fetch(image);
+    const blob = await response.blob();
+    await uploadBytes(imgRef, blob);
 
-      // Download URL for the uploaded image
-      const url = await getDownloadURL(imgRef);
-      console.log("Image uploaded, download URL:", url);
-      setUploading(false);
-      return url;
-    } catch (error) {
-      // Stop loader if upload fails
-      setUploading(false);
-      console.error("Error uploading image:", error.message);
-      Alert.alert("Error", "Failed to upload image");
-      return null;
-    }
+    const url = await getDownloadURL(imgRef);
+    setUploading(false);
+    return url;
   }
 
-  // Add note and upload image
   async function handleAddNote() {
-    if (note.trim() === "") {
-      Alert.alert("Error", "Note cannot be empty");
+    if (!note.trim()) {
+      Alert.alert("Note cannot be empty");
       return;
     }
 
     try {
-      // Add new note to Firebase
-      const notesRef = ref(database, "notes");
-      const newNoteRef = push(notesRef, { text: note });
+      const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
+      const newNoteRef = await addDoc(userNotesRef, {
+        text: note,
+        imageUrl: null,
+        createdAt: new Date(),
+      });
 
-      if (image) {
-        const imageUrl = await uploadImage(newNoteRef.key);
-
-        if (imageUrl) {
-          // Update note with image URL
-          await update(ref(database, `notes/${newNoteRef.key}`), { imageUrl });
-          console.log("Note updated with image URL:", imageUrl);
-        }
+      const imageUrl = await uploadImage(newNoteRef.id);
+      if (imageUrl) {
+        await updateDoc(
+          doc(firestoreDB, `users/${userId}/notes/${newNoteRef.id}`),
+          { imageUrl }
+        );
       }
 
+      setNotes([...notes, { id: newNoteRef.id, text: note, imageUrl }]);
       setNote("");
       setImage(null);
-      // Reset image selected state
       setImageSelected(false);
-      Alert.alert("Success", "Note added successfully!");
+      Alert.alert("Note added successfully!");
     } catch (error) {
-      console.error("Error adding note:", error.message);
-      Alert.alert("Error", "Failed to add note");
+      Alert.alert("Error adding note", error.message);
     }
   }
 
-  // Load notes from Firebase Realtime Database
-  function loadNotes() {
-    const notesRef = ref(database, "notes");
-    onValue(
-      notesRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        const loadedNotes = data
-          ? Object.entries(data).map(([key, value]) => ({
-              id: key,
-              text: value.text,
-              imageUrl: value.imageUrl || null,
-            }))
-          : [];
-        setNotes(loadedNotes);
-        console.log("Notes loaded:", loadedNotes);
-      },
-      (error) => {
-        console.error("Error loading notes:", error.message);
-        Alert.alert("Error", "Failed to load notes");
-      }
-    );
+  async function loadNotes(userId) {
+    try {
+      const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
+      const userNotesQuery = query(userNotesRef);
+      const querySnapshot = await getDocs(userNotesQuery);
+
+      const loadedNotes = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setNotes(loadedNotes);
+    } catch (error) {
+      Alert.alert("Failed to load notes", error.message);
+    }
   }
 
-  // Handle note click (navigate to detailed view)
   function handlePressNote(noteId) {
     router.push(`/note/${noteId}`);
   }
@@ -215,21 +167,13 @@ export default function NoteTakingApp() {
           onChangeText={setNote}
           placeholder="Enter your note here"
         />
-
         <Button title="Pick an image" onPress={pickImage} />
-
         <Button title="Take a photo" onPress={takeImage} />
-
         {image && <Image source={{ uri: image }} style={styles.imagePreview} />}
-
-        {/* Displaying selected image info */}
         {imageSelected && (
           <Text style={styles.imageSelectedText}>Image selected</Text>
         )}
-
-        {/* Show activity indicator when uploading */}
         {uploading && <ActivityIndicator size="small" color="#0000ff" />}
-
         <Button title="Add Note" onPress={handleAddNote} />
       </View>
 
@@ -253,6 +197,8 @@ export default function NoteTakingApp() {
     </SafeAreaView>
   );
 }
+
+// Your styles here...
 
 const styles = StyleSheet.create({
   container: {
