@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
 } from "react-native";
+import MapView, { Marker } from "react-native-maps";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   collection,
@@ -27,12 +28,13 @@ export default function NoteDetail() {
   const [imageUrl, setImageUrl] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [location, setLocation] = useState(null); // Store location coordinates
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setUserId(user.uid); // Save the userId for later use
-        loadNote(user.uid); // Pass userId to load the note
+        setUserId(user.uid);
+        loadNote(user.uid);
       } else {
         router.push("/login/LoginScreen");
       }
@@ -49,6 +51,7 @@ export default function NoteDetail() {
         const noteData = noteDoc.data();
         setNoteText(noteData.text);
         setImageUrl(noteData.imageUrl || null);
+        setLocation(noteData.location || null); // Load saved location
       } else {
         Alert.alert("Error", "Note not found");
       }
@@ -61,6 +64,7 @@ export default function NoteDetail() {
     try {
       await updateDoc(doc(firestoreDB, `users/${userId}/notes`, id), {
         text: noteText,
+        location: location, // Save location coordinates
       });
       setIsEditing(false);
       Alert.alert("Note updated successfully!");
@@ -78,6 +82,12 @@ export default function NoteDetail() {
       Alert.alert("Error deleting note", error.message);
     }
   }
+
+  // Function to handle long-press on the map and set location
+  const handleMapLongPress = (event) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    setLocation({ latitude, longitude });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -98,6 +108,21 @@ export default function NoteDetail() {
           </View>
         )}
       </View>
+
+      {/* MapView Component */}
+      <MapView
+        style={styles.map}
+        initialRegion={{
+          latitude: location?.latitude || 37.78825, // Default location
+          longitude: location?.longitude || -122.4324,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        }}
+        onLongPress={handleMapLongPress}
+      >
+        {location && <Marker coordinate={location} />}
+      </MapView>
+
       <View style={styles.buttonContainer}>
         {isEditing ? (
           <>
@@ -167,10 +192,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   noteImage: {
-    width: 100, // Adjust width as needed
-    height: 100, // Adjust height as needed
-    marginTop: 10, // Spacing above the image
-    borderRadius: 10, // Optional: Add rounded corners
+    width: 100,
+    height: 100,
+    marginTop: 10,
+    borderRadius: 10,
+  },
+  map: {
+    width: "100%",
+    height: 200,
+    borderRadius: 10,
+    marginTop: 20,
   },
   buttonContainer: {
     flexDirection: "row",

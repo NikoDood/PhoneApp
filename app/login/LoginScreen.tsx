@@ -14,7 +14,7 @@ import { NavigationProp, useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 
 export default function LoginScreen() {
-  const navigation = useNavigation<NavigationProp<any>>(); // Retrieve navigation using the hook
+  const navigation = useNavigation<NavigationProp<any>>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

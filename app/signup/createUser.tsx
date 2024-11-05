@@ -14,12 +14,12 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth"; // Import signIn
 import { doc, setDoc } from "firebase/firestore";
-import { auth, firestoreDB } from "../../services/firebase"; // Adjust the import path
-import { useNavigation } from "@react-navigation/native"; // Import useNavigation
+import { auth, firestoreDB } from "../../services/firebase";
+import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 
 const SignupScreen: React.FC = () => {
-  const navigation = useNavigation(); // Initialize navigation
+  const navigation = useNavigation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,7 +42,8 @@ const SignupScreen: React.FC = () => {
 
   // Handle signup
   const handleSignup = async () => {
-    if (!validateInput()) return; // Validate input before proceeding
+    // Validate input before moving on
+    if (!validateInput()) return;
 
     setLoading(true);
     try {
@@ -53,11 +54,10 @@ const SignupScreen: React.FC = () => {
       );
       const user = userCredential.user;
 
-      // Create a user document in Firestore
+      // Create a user in Firestore
       await setDoc(doc(firestoreDB, "users", user.uid), {
         email: user.email,
         createdAt: new Date(),
-        // Add any other initial user data here
       });
 
       Alert.alert("Success", "User created successfully");
@@ -65,8 +65,8 @@ const SignupScreen: React.FC = () => {
       // Log in the user after signup
       await signInWithEmailAndPassword(auth, email, password);
 
-      // Navigate to home page
-      //navigation.navigate("Home"); // Adjust to your home screen name
+      // Navigate back
+      //navigation.navigate("Home"); //
       router.push("/");
     } catch (error: any) {
       console.error("Signup error:", error);

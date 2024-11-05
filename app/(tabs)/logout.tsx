@@ -5,13 +5,13 @@ import { auth } from "../../services/firebase"; // Adjust the import path
 import { useRouter } from "expo-router"; // Import router for navigation
 
 const LogoutTab: React.FC = () => {
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
       Alert.alert("Success", "Logged out successfully");
-      router.push("/"); // Redirect to index page
+      router.push("/");
     } catch (error: any) {
       console.error("Logout error:", error);
       Alert.alert("Logout error", error.message);
