@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { Audio } from "expo-av";
 import {
   addDoc,
   collection,
@@ -20,7 +21,6 @@ import {
   getDocs,
   query,
   updateDoc,
-  where,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -35,7 +35,8 @@ export default function NoteTakingApp() {
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState([]);
   const [image, setImage] = useState(null);
-  const [imageSelected, setImageSelected] = useState(false);
+  const [audio, setAudio] = useState(null);
+  const [recording, setRecording] = useState(null);
   const [uploading, setUploading] = useState(false);
   const router = useRouter();
   const [userId, setUserId] = useState(null);
@@ -49,29 +50,10 @@ export default function NoteTakingApp() {
         router.push("/login/LoginScreen");
       }
     });
-
     return unsubscribe;
   }, []);
 
-  async function takeImage() {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission to access camera is required!");
-      return;
-    }
-
-    const cameraResult = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 1,
-    });
-
-    if (!cameraResult.canceled && cameraResult.assets[0].uri) {
-      setImage(cameraResult.assets[0].uri);
-      setImageSelected(true);
-    }
-  }
-
+  // Function to pick an image from the gallerys
   async function pickImage() {
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -88,8 +70,70 @@ export default function NoteTakingApp() {
 
     if (!pickerResult.canceled && pickerResult.assets[0].uri) {
       setImage(pickerResult.assets[0].uri);
-      setImageSelected(true);
     }
+  }
+
+  // Function to capture an image with the camera
+  async function takeImage() {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert("Permission to access camera is required!");
+      return;
+    }
+
+    const cameraResult = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
+    });
+
+    if (!cameraResult.canceled && cameraResult.assets[0].uri) {
+      setImage(cameraResult.assets[0].uri);
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert("Microphone permission is required! :)");
+        return;
+      }
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(
+        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
+      );
+      await recording.startAsync();
+      setRecording(recording);
+    } catch (error) {
+      console.error("Failed to record:", error);
+    }
+  }
+
+  async function stopRecording() {
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setAudio(uri);
+      setRecording(null);
+      Alert.alert("Recording saved!");
+    } catch (error) {
+      console.error("Failed to stop recording:", error);
+    }
+  }
+
+  async function uploadAudio(noteId) {
+    if (!audio) return null;
+    setUploading(true);
+
+    const audioRef = storageRef(storage, `notes/${noteId}-audio.m4a`);
+    const response = await fetch(audio);
+    const blob = await response.blob();
+    await uploadBytes(audioRef, blob);
+
+    const url = await getDownloadURL(audioRef);
+    setUploading(false);
+    return url;
   }
 
   async function uploadImage(noteId) {
@@ -117,32 +161,45 @@ export default function NoteTakingApp() {
       const newNoteRef = await addDoc(userNotesRef, {
         text: note,
         imageUrl: null,
+        audioUrl: null,
         createdAt: new Date(),
       });
 
       const imageUrl = await uploadImage(newNoteRef.id);
-      if (imageUrl) {
+      const audioUrl = await uploadAudio(newNoteRef.id);
+
+      if (imageUrl || audioUrl) {
         await updateDoc(
           doc(firestoreDB, `users/${userId}/notes/${newNoteRef.id}`),
-          { imageUrl }
+          {
+            imageUrl,
+            audioUrl,
+          }
         );
       }
 
-      setNotes([...notes, { id: newNoteRef.id, text: note, imageUrl }]);
+      setNotes([
+        ...notes,
+        { id: newNoteRef.id, text: note, imageUrl, audioUrl },
+      ]);
       setNote("");
       setImage(null);
-      setImageSelected(false);
+      setAudio(null);
       Alert.alert("Note added successfully!");
     } catch (error) {
       Alert.alert("Error adding note", error.message);
     }
   }
 
+  function handlePressNote(noteId) {
+    const path = "/note/" + noteId;
+    router.push(path);
+  }
+
   async function loadNotes(userId) {
     try {
       const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
-      const userNotesQuery = query(userNotesRef);
-      const querySnapshot = await getDocs(userNotesQuery);
+      const querySnapshot = await getDocs(userNotesRef);
 
       const loadedNotes = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -152,10 +209,6 @@ export default function NoteTakingApp() {
     } catch (error) {
       Alert.alert("Failed to load notes", error.message);
     }
-  }
-
-  function handlePressNote(noteId) {
-    router.push(`/note/${noteId}`);
   }
 
   return (
@@ -169,10 +222,13 @@ export default function NoteTakingApp() {
         />
         <Button title="Pick an image" onPress={pickImage} />
         <Button title="Take a photo" onPress={takeImage} />
+
+        <Button
+          title={recording ? "Stop Recording" : "Record Voice"}
+          onPress={recording ? stopRecording : startRecording}
+        />
+
         {image && <Image source={{ uri: image }} style={styles.imagePreview} />}
-        {imageSelected && (
-          <Text style={styles.imageSelectedText}>Image selected</Text>
-        )}
         {uploading && <ActivityIndicator size="small" color="#0000ff" />}
         <Button title="Add Note" onPress={handleAddNote} />
       </View>
@@ -188,6 +244,17 @@ export default function NoteTakingApp() {
                 <Image
                   source={{ uri: item.imageUrl }}
                   style={styles.noteImage}
+                />
+              )}
+              {item.audioUrl && (
+                <Button
+                  title="Play Audio"
+                  onPress={async () => {
+                    const { sound } = await Audio.Sound.createAsync({
+                      uri: item.audioUrl,
+                    });
+                    await sound.playAsync();
+                  }}
                 />
               )}
             </View>
@@ -231,11 +298,6 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     marginVertical: 10,
-  },
-  imageSelectedText: {
-    color: "green",
-    marginBottom: 10,
-    fontWeight: "bold",
   },
   noteImage: {
     width: 100,

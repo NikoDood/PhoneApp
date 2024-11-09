@@ -51,7 +51,7 @@ export default function NoteDetail() {
         const noteData = noteDoc.data();
         setNoteText(noteData.text);
         setImageUrl(noteData.imageUrl || null);
-        setLocation(noteData.location || null); // Load saved location
+        setLocation(noteData.location || null);
       } else {
         Alert.alert("Error", "Note not found");
       }
@@ -64,7 +64,7 @@ export default function NoteDetail() {
     try {
       await updateDoc(doc(firestoreDB, `users/${userId}/notes`, id), {
         text: noteText,
-        location: location, // Save location coordinates
+        location: location,
       });
       setIsEditing(false);
       Alert.alert("Note updated successfully!");
@@ -109,11 +109,11 @@ export default function NoteDetail() {
         )}
       </View>
 
-      {/* MapView Component */}
+      {/* MapView loading coords into */}
       <MapView
         style={styles.map}
         initialRegion={{
-          latitude: location?.latitude || 37.78825, // Default location
+          latitude: location?.latitude || 37.78825,
           longitude: location?.longitude || -122.4324,
           latitudeDelta: 0.0922,
           longitudeDelta: 0.0421,
