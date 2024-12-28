@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  RefreshControl,
+  ScrollView,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
@@ -21,6 +23,8 @@ import {
   getDocs,
   query,
   updateDoc,
+  writeBatch,
+  orderBy,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -30,6 +34,8 @@ import {
 import { firestoreDB, storage, auth } from "../../services/firebase";
 import { useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
+import DraggableFlatList from "react-native-draggable-flatlist";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 export default function NoteTakingApp() {
   const [note, setNote] = useState("");
@@ -40,6 +46,7 @@ export default function NoteTakingApp() {
   const [uploading, setUploading] = useState(false);
   const router = useRouter();
   const [userId, setUserId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -53,7 +60,34 @@ export default function NoteTakingApp() {
     return unsubscribe;
   }, []);
 
-  // Function to pick an image from the gallerys
+  const onRefresh = useCallback(() => {
+    if (userId) {
+      setRefreshing(true);
+      loadNotes(userId).then(() => setRefreshing(false));
+    } else {
+      setRefreshing(false); // Stop the refresh indicator if userId is missing
+    }
+  }, [userId]);
+
+  const handleDragEnd = async ({ data }) => {
+    setNotes(data);
+
+    // Save the new order to Firestore
+    const batch = writeBatch(firestoreDB);
+    data.forEach((note, index) => {
+      const noteRef = doc(firestoreDB, `users/${userId}/notes/${note.id}`);
+      batch.update(noteRef, { position: index });
+    });
+
+    try {
+      await batch.commit();
+      Alert.alert("Notes order saved!");
+    } catch (error) {
+      Alert.alert("Failed to save order", error.message);
+    }
+  };
+
+  // Function to pick an image from the galleryss
   async function pickImage() {
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -199,7 +233,8 @@ export default function NoteTakingApp() {
   async function loadNotes(userId) {
     try {
       const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
-      const querySnapshot = await getDocs(userNotesRef);
+      const q = query(userNotesRef, orderBy("position"));
+      const querySnapshot = await getDocs(q);
 
       const loadedNotes = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -210,66 +245,80 @@ export default function NoteTakingApp() {
       Alert.alert("Failed to load notes", error.message);
     }
   }
+  const renderItem = ({ item, drag }) => (
+    <TouchableOpacity
+      onLongPress={drag}
+      style={styles.noteContainer}
+      onPress={() => handlePressNote(item.id)}
+    >
+      <Text style={styles.noteText}>{item.text}</Text>
+      {item.imageUrl && (
+        <Image source={{ uri: item.imageUrl }} style={styles.noteImage} />
+      )}
+      {item.audioUrl && (
+        <Button
+          title="Play Audio"
+          onPress={async () => {
+            const { sound } = await Audio.Sound.createAsync({
+              uri: item.audioUrl,
+            });
+            await sound.playAsync();
+          }}
+        />
+      )}
+    </TouchableOpacity>
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          value={note}
-          onChangeText={setNote}
-          placeholder="Enter your note here"
-        />
-        <Button title="Pick an image" onPress={pickImage} />
-        <Button title="Take a photo" onPress={takeImage} />
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <ScrollView
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#0000ff"]}
+              tintColor="#0000ff"
+            />
+          }
+        >
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.textInput}
+              value={note}
+              onChangeText={setNote}
+              placeholder="Enter your note here"
+            />
+            <Button title="Pick an image" onPress={pickImage} />
+            <Button title="Take a photo" onPress={takeImage} />
+            <Button
+              title={recording ? "Stop Recording" : "Record Voice"}
+              onPress={recording ? stopRecording : startRecording}
+            />
+            {image && (
+              <Image source={{ uri: image }} style={styles.imagePreview} />
+            )}
+            {uploading && <ActivityIndicator size="small" color="#0000ff" />}
+            <Button title="Add Note" onPress={handleAddNote} />
+          </View>
 
-        <Button
-          title={recording ? "Stop Recording" : "Record Voice"}
-          onPress={recording ? stopRecording : startRecording}
-        />
-
-        {image && <Image source={{ uri: image }} style={styles.imagePreview} />}
-        {uploading && <ActivityIndicator size="small" color="#0000ff" />}
-        <Button title="Add Note" onPress={handleAddNote} />
-      </View>
-
-      <FlatList
-        data={notes}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => handlePressNote(item.id)}>
-            <View style={styles.noteContainer}>
-              <Text style={styles.noteText}>{item.text}</Text>
-              {item.imageUrl && (
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  style={styles.noteImage}
-                />
-              )}
-              {item.audioUrl && (
-                <Button
-                  title="Play Audio"
-                  onPress={async () => {
-                    const { sound } = await Audio.Sound.createAsync({
-                      uri: item.audioUrl,
-                    });
-                    await sound.playAsync();
-                  }}
-                />
-              )}
-            </View>
-          </TouchableOpacity>
-        )}
-      />
-    </SafeAreaView>
+          <DraggableFlatList
+            data={notes}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            onDragEnd={handleDragEnd}
+            style={styles.flatList}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
-// Your styles here...
+// Your styles here...ss
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 100,
     flex: 1,
     backgroundColor: "#F5F5F5",
     padding: 20,

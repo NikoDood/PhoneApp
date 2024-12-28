@@ -10,11 +10,11 @@ import {
 } from "react-native";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../services/firebase";
-import { NavigationProp, useNavigation } from "@react-navigation/native";
+//import { NavigationProp, useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 
 export default function LoginScreen() {
-  const navigation = useNavigation<NavigationProp<any>>();
+  //const navigation = useNavigation<NavigationProp<any>>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

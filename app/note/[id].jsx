@@ -23,6 +23,7 @@ import { onAuthStateChanged } from "firebase/auth";
 
 export default function NoteDetail() {
   const { id } = useLocalSearchParams();
+  console.log("Working id" + id);
   const router = useRouter();
   const [noteText, setNoteText] = useState("");
   const [imageUrl, setImageUrl] = useState(null);

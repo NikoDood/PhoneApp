@@ -98,7 +98,8 @@ const AllMarkersMap: React.FC = () => {
   };
 
   const handleMarkerPress = (markerId: string) => {
-    router.push(`/notes/NoteDetail?id=${markerId}`);
+    console.log(markerId);
+    router.push(`/note/${markerId}`);
   };
 
   const goToMarker = (index: number) => {

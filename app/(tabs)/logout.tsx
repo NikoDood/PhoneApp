@@ -11,7 +11,7 @@ const LogoutTab: React.FC = () => {
     try {
       await signOut(auth);
       Alert.alert("Success", "Logged out successfully");
-      router.push("/");
+      router.push("/login/LoginScreen");
     } catch (error: any) {
       console.error("Logout error:", error);
       Alert.alert("Logout error", error.message);
