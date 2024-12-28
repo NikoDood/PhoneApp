@@ -1,41 +1,33 @@
 {
   "expo": {
-    "name": "GettingStarted",
-    "slug": "GettingStarted",
-    "newArchEnabled": true,
+    "name": "PhoneApp",
+    "slug": "school",
+    "platforms": ["android", "ios"],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
-
-    "androidStatusBar": {
-      "backgroundColor": "blue",
-      "translucent": false
-    },
-
-    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.example.phoneapp"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+      "package": "com.example.phoneapp"
+    },
+
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_ERROR_RECOVERY"
+    },
+    "description": "A simple phone app",
+    "extra": {
+      "eas": {
+        "projectId": "51b47a1c-3d14-477c-bc31-6e35c70cbb8f"
       }
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
-    "plugins": ["expo-router", "expo-font"],
-    "experiments": {
-      "typedRoutes": true
-    }
+    "owner": "kemixd3"
   }
 }
