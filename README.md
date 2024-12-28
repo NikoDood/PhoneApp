@@ -48,3 +48,14 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Usefull commands
+
+Run expo doctor Again After Fixes
+After addressing these issues (adding assets, updating dependencies, and checking library compatibility), you should run expo doctor again to verify that everything is correct:
+
+- npx expo-doctor
+
+After making the necessary changes, proceed with building the app
+
+- eas build -p android --profile release --clear-cache
