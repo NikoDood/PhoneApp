@@ -2,6 +2,7 @@
   "expo": {
     "name": "PhoneApp",
     "slug": "school",
+    "assetBundlePatterns": ["**/*"],
     "platforms": ["android", "ios"],
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,7 +16,8 @@
       "bundleIdentifier": "com.example.phoneapp"
     },
     "android": {
-      "package": "com.example.phoneapp"
+      "package": "com.example.phoneapp",
+      "versionCode": 1
     },
 
     "updates": {

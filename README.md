@@ -59,3 +59,7 @@ After addressing these issues (adding assets, updating dependencies, and checkin
 After making the necessary changes, proceed with building the app
 
 - eas build -p android --profile release --clear-cache
+
+REMEMBER:
+$env:EAS_NO_VCS=1 - Is on to ignore github versioning
+set EXPO_DOCTOR_ENABLE_DIRECTORY_CHECK=false - Is on to ignore the tests
