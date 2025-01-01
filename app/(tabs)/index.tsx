@@ -13,6 +13,10 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
@@ -47,6 +51,7 @@ export default function NoteTakingApp() {
   const router = useRouter();
   const [userId, setUserId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -69,23 +74,32 @@ export default function NoteTakingApp() {
     }
   }, [userId]);
 
-  const handleDragEnd = async ({ data }) => {
-    setNotes(data);
+  const handleDragEnd = useCallback(
+    async ({ data }) => {
+      // Use a cloned array to avoid mutating original state
+      const clonedData = data.map((item, index) => ({
+        ...item,
+        position: index,
+      }));
 
-    // Save the new order to Firestore
-    const batch = writeBatch(firestoreDB);
-    data.forEach((note, index) => {
-      const noteRef = doc(firestoreDB, `users/${userId}/notes/${note.id}`);
-      batch.update(noteRef, { position: index });
-    });
+      setNotes(clonedData);
 
-    try {
-      await batch.commit();
-      Alert.alert("Notes order saved!");
-    } catch (error) {
-      Alert.alert("Failed to save order", error.message);
-    }
-  };
+      // Save the new order to Firestore
+      const batch = writeBatch(firestoreDB);
+      clonedData.forEach((note) => {
+        const noteRef = doc(firestoreDB, `users/${userId}/notes/${note.id}`);
+        batch.update(noteRef, { position: note.position });
+      });
+
+      try {
+        await batch.commit();
+        Alert.alert("Notes order saved!");
+      } catch (error) {
+        Alert.alert("Failed to save order", error.message);
+      }
+    },
+    [userId]
+  );
 
   // Function to pick an image from the galleryss
   async function pickImage() {
@@ -192,11 +206,17 @@ export default function NoteTakingApp() {
 
     try {
       const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
+
+      const highestPosition = notes.length
+        ? Math.max(...notes.map((n) => n.position))
+        : -1;
+
       const newNoteRef = await addDoc(userNotesRef, {
         text: note,
         imageUrl: null,
         audioUrl: null,
         createdAt: new Date(),
+        position: highestPosition + 1,
       });
 
       const imageUrl = await uploadImage(newNoteRef.id);
@@ -214,7 +234,13 @@ export default function NoteTakingApp() {
 
       setNotes([
         ...notes,
-        { id: newNoteRef.id, text: note, imageUrl, audioUrl },
+        {
+          id: newNoteRef.id,
+          text: note,
+          imageUrl,
+          audioUrl,
+          position: highestPosition + 1,
+        },
       ]);
       setNote("");
       setImage(null);
@@ -233,7 +259,7 @@ export default function NoteTakingApp() {
   async function loadNotes(userId) {
     try {
       const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
-      const q = query(userNotesRef, orderBy("position"));
+      const q = query(userNotesRef, orderBy("position", "asc"));
       const querySnapshot = await getDocs(q);
 
       const loadedNotes = querySnapshot.docs.map((doc) => ({
@@ -272,85 +298,210 @@ export default function NoteTakingApp() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={["#0000ff"]}
-              tintColor="#0000ff"
-            />
-          }
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.textInput}
-              value={note}
-              onChangeText={setNote}
-              placeholder="Enter your note here"
-            />
-            <Button title="Pick an image" onPress={pickImage} />
-            <Button title="Take a photo" onPress={takeImage} />
-            <Button
-              title={recording ? "Stop Recording" : "Record Voice"}
-              onPress={recording ? stopRecording : startRecording}
-            />
-            {image && (
-              <Image source={{ uri: image }} style={styles.imagePreview} />
-            )}
-            {uploading && <ActivityIndicator size="small" color="#0000ff" />}
-            <Button title="Add Note" onPress={handleAddNote} />
-          </View>
+          {/* Dismiss keyboard on tap outside input */}
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={{ flex: 1, justifyContent: "space-between" }}>
+              {/* Notes List */}
+              <View style={styles.flatListContainer}>
+                <DraggableFlatList
+                  data={notes}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderItem}
+                  onDragEnd={handleDragEnd}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh} // Make sure this function fetches new data
+                      colors={["#0000ff"]}
+                      tintColor="#0000ff"
+                    />
+                  }
+                />
+              </View>
 
-          <DraggableFlatList
-            data={notes}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            onDragEnd={handleDragEnd}
-            style={styles.flatList}
-          />
-        </ScrollView>
+              {/* Input and Actions */}
+              <View style={styles.inputSection}>
+                <TextInput
+                  style={styles.textInput}
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="Enter your note here..."
+                  multiline
+                />
+
+                {/* "+" Button for Action Menu */}
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => setShowActionMenu((prev) => !prev)} // Toggle state
+                >
+                  <Text style={styles.actionButtonText}>+</Text>
+                </TouchableOpacity>
+
+                {/* Action Menu */}
+                {showActionMenu && (
+                  <View style={styles.actionMenu}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        pickImage();
+                        setShowActionMenu(false);
+                      }}
+                      style={styles.menuItem}
+                    >
+                      <Text style={styles.menuText}>Upload Image</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={takeImage}
+                      style={styles.menuItem}
+                    >
+                      <Text style={styles.menuText}>Take Photo</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={recording ? stopRecording : startRecording}
+                      style={styles.menuItem}
+                    >
+                      <Text style={styles.menuText}>
+                        {recording ? "Stop Recording" : "Record Audio"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Add Note Button */}
+                <TouchableOpacity
+                  style={styles.addNoteButton}
+                  onPress={handleAddNote}
+                >
+                  <Text style={styles.addNoteButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Preview Section */}
+              {image && (
+                <View style={styles.previewContainer}>
+                  <Image source={{ uri: image }} style={styles.imagePreview} />
+                  <TouchableOpacity onPress={() => setImage(null)}>
+                    <Text style={styles.removePreview}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {uploading && <ActivityIndicator size="small" color="#0000ff" />}
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </GestureHandlerRootView>
   );
 }
-
-// Your styles here...ss
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F5F5F5",
-    padding: 20,
   },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  textInput: {
-    height: 40,
-    borderColor: "#ccc",
-    borderWidth: 1,
-    borderRadius: 5,
+  flatListContainer: {
+    flex: 1, // This will take the remaining space of the screen
     paddingHorizontal: 10,
     marginBottom: 10,
+    backgroundColor: "#F5F5F5",
   },
   noteContainer: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
+    backgroundColor: "#fff",
+    marginBottom: 15,
+    padding: 15,
+    borderRadius: 10,
+    elevation: 3,
   },
   noteText: {
     fontSize: 16,
     color: "#333",
   },
+  noteImage: {
+    width: "100%",
+    height: 200,
+    marginTop: 10,
+    borderRadius: 8,
+    resizeMode: "cover",
+  },
+  inputSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#ccc",
+  },
+  textInput: {
+    flex: 1,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 40,
+    fontSize: 16,
+    marginRight: 10,
+    backgroundColor: "#F9F9F9",
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: "#0084FF",
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  actionButtonText: {
+    fontSize: 24,
+    color: "#fff",
+  },
+  actionMenu: {
+    position: "absolute",
+    bottom: 70,
+    right: 10,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    elevation: 5,
+    zIndex: 10,
+    padding: 10,
+  },
+  menuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  menuText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  addNoteButton: {
+    backgroundColor: "#0084FF",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  addNoteButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  previewContainer: {
+    padding: 10,
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#ccc",
+  },
   imagePreview: {
     width: 100,
     height: 100,
-    marginVertical: 10,
+    marginBottom: 10,
+    borderRadius: 10,
   },
-  noteImage: {
-    width: 100,
-    height: 100,
-    marginTop: 10,
+  removePreview: {
+    fontSize: 14,
+    color: "red",
   },
 });
