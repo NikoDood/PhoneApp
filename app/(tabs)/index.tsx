@@ -298,31 +298,30 @@ export default function NoteTakingApp() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          {/* Dismiss keyboard on tap outside input */}
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={{ flex: 1, justifyContent: "space-between" }}>
-              {/* Notes List */}
-              <View style={styles.flatListContainer}>
-                <DraggableFlatList
-                  data={notes}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderItem}
-                  onDragEnd={handleDragEnd}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={refreshing}
-                      onRefresh={onRefresh} // Make sure this function fetches new data
-                      colors={["#0000ff"]}
-                      tintColor="#0000ff"
-                    />
-                  }
-                />
-              </View>
-
+        {/* Dismiss keyboard on tap outside input */}
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={{ flex: 1, justifyContent: "space-between" }}>
+            {/* Notes List */}
+            <View style={styles.flatListContainer}>
+              <DraggableFlatList
+                data={notes}
+                keyExtractor={(item) => item.id}
+                renderItem={renderItem}
+                onDragEnd={handleDragEnd}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh} // Make sure this function fetches new data
+                    colors={["#0000ff"]}
+                    tintColor="#0000ff"
+                  />
+                }
+              />
+            </View>
+            <KeyboardAvoidingView
+              style={{ flex: 0.15 }}
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
               {/* Input and Actions */}
               <View style={styles.inputSection}>
                 <TextInput
@@ -379,20 +378,19 @@ export default function NoteTakingApp() {
                   <Text style={styles.addNoteButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Preview Section */}
-              {image && (
-                <View style={styles.previewContainer}>
-                  <Image source={{ uri: image }} style={styles.imagePreview} />
-                  <TouchableOpacity onPress={() => setImage(null)}>
-                    <Text style={styles.removePreview}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {uploading && <ActivityIndicator size="small" color="#0000ff" />}
-            </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+            </KeyboardAvoidingView>
+            {/* Preview Section */}
+            {image && (
+              <View style={styles.previewContainer}>
+                <Image source={{ uri: image }} style={styles.imagePreview} />
+                <TouchableOpacity onPress={() => setImage(null)}>
+                  <Text style={styles.removePreview}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {uploading && <ActivityIndicator size="small" color="#0000ff" />}
+          </View>
+        </TouchableWithoutFeedback>
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -407,6 +405,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: 10,
     backgroundColor: "#F5F5F5",
+    marginTop: 50,
   },
   noteContainer: {
     backgroundColor: "#fff",

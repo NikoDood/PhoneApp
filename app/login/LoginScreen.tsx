@@ -29,7 +29,9 @@ export default function LoginScreen() {
       .then(() => {
         console.log("works");
         Alert.alert("Success", "Logged in successfully");
-        router.push(`/`); // Navigate to the home page
+
+        // Replace the login screen with the home page
+        router.replace("/");
       })
       .catch((error) => {
         console.error("Login error:", error);

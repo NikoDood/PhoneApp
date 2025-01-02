@@ -1,17 +1,20 @@
 import React from "react";
-import { View, Text, Alert, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { signOut } from "firebase/auth";
-import { auth } from "../../services/firebase"; // Adjust the import path
-import { useRouter } from "expo-router"; // Import router for navigation
+import { auth } from "../../services/firebase";
+import { useRouter } from "expo-router";
 
 const LogoutTab: React.FC = () => {
   const router = useRouter();
 
   const handleLogout = async () => {
     try {
+      // Sign out the user from Firebase
       await signOut(auth);
       Alert.alert("Success", "Logged out successfully");
-      router.push("/login/LoginScreen");
+
+      // Clear the navigation stack and redirect to the login screen
+      router.replace("/login/LoginScreen"); // Clear the stack and redirect to login
     } catch (error: any) {
       console.error("Logout error:", error);
       Alert.alert("Logout error", error.message);

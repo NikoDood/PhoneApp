@@ -16,15 +16,28 @@ export default function Layout() {
       }}
     >
       <Tabs.Screen
+        name="ChatOverview"
+        options={{
+          title: "Chats",
+        }}
+      />
+
+      <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: "Notes",
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon
               name={focused ? "home" : "home-outline"}
               color={color}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="markers"
+        options={{
+          title: "Notes map",
         }}
       />
     </Tabs>

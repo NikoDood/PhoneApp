@@ -11,13 +11,7 @@ import {
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  collection,
-  doc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-} from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { firestoreDB, auth } from "../../services/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 

@@ -19,6 +19,11 @@
       "package": "com.example.phoneapp",
       "versionCode": 1
     },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
 
     "updates": {
       "enabled": true,

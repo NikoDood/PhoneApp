@@ -20,11 +20,13 @@ import {
 import { firestoreDB, auth } from "../../services/firebase";
 import { useRouter } from "expo-router";
 import { Notifications } from "react-native-notifications";
+import Icon from "react-native-vector-icons/FontAwesome"; // Make sure this import is correct
 
 interface Chat {
   id: string;
   chatId: string;
   otherUser: string;
+  status: string; // Ensure this field exists and is fetched
 }
 
 export default function ChatOverview(): JSX.Element {
@@ -56,11 +58,11 @@ export default function ChatOverview(): JSX.Element {
           id: doc.id,
           ...doc.data(),
         })) as Chat[];
+        console.log("Fetched chats:", chatData); // Debug: check if chats are being fetched correctly
         setChats(chatData);
       },
       (error) => {
         console.error("Error fetching chats:", error);
-        // No alert needed on logout as it may trigger here
         if (isAuthenticated) {
           Alert.alert("Error", "Failed to load chats.");
         }
@@ -89,16 +91,20 @@ export default function ChatOverview(): JSX.Element {
       }
 
       const invitedUserId = querySnapshot.docs[0].id;
+      const invitedUserEmail = querySnapshot.docs[0].data().email;
+
       const combinedId =
         auth.currentUser?.uid! < invitedUserId
           ? `${auth.currentUser?.uid}-${invitedUserId}`
           : `${invitedUserId}-${auth.currentUser?.uid}`;
 
+      // Create a chat reference in Firestore
       const chatRef = doc(firestoreDB, `chats`, combinedId);
       await setDoc(chatRef, {
         users: [auth.currentUser?.uid, invitedUserId],
         createdAt: new Date(),
-        status: "pending",
+        status: "pending", // Set status to pending when creating the chat
+        userEmails: [auth.currentUser?.email, invitedUserEmail], // Add emails to chat document
       });
 
       await Promise.all(
@@ -107,8 +113,8 @@ export default function ChatOverview(): JSX.Element {
             chatId: combinedId,
             otherUser:
               userId === auth.currentUser?.uid
-                ? invitedUserId
-                : auth.currentUser?.uid,
+                ? invitedUserEmail
+                : auth.currentUser?.email,
           })
         )
       );
@@ -118,7 +124,7 @@ export default function ChatOverview(): JSX.Element {
         from: auth.currentUser?.uid,
         to: invitedUserId,
         chatId: combinedId,
-        status: "pending",
+        status: "pending", // Set status to pending in invite document
       });
 
       Alert.alert("Success", "Chat invitation sent successfully!");
@@ -128,7 +134,15 @@ export default function ChatOverview(): JSX.Element {
     }
   };
 
-  const openChat = (chatId: string) => {
+  const openChat = (chatId: string, status: string) => {
+    // Only open the chat if the status is "active"
+    if (status === "pending") {
+      Alert.alert(
+        "Chat Pending",
+        "You can't open this chat until it's accepted."
+      );
+      return;
+    }
     router.push(`/chat/${chatId}`);
   };
 
@@ -141,10 +155,22 @@ export default function ChatOverview(): JSX.Element {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.chatItem}
-            onPress={() => openChat(item.chatId)}
+            style={[
+              styles.chatItem,
+              item.status === "pending" && styles.pendingChat, // Apply background for pending chats
+            ]}
+            onPress={() => openChat(item.chatId, item.status)} // Pass status to handle pending state
+            disabled={item.status === "pending"} // Disable the chat if status is pending
           >
             <Text style={styles.chatText}>{item.otherUser}</Text>
+            {item.status === "pending" && (
+              <Icon
+                name="spinner"
+                size={16}
+                color="gray"
+                style={styles.pendingIcon}
+              />
+            )}
           </TouchableOpacity>
         )}
       />
@@ -183,9 +209,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
+  pendingChat: {
+    backgroundColor: "#f0f0f0", // Change background for pending chats
+  },
   chatText: {
     fontSize: 16,
     fontWeight: "bold",
+  },
+  pendingIcon: {
+    marginLeft: 10,
+    alignSelf: "center",
   },
   inviteContainer: {
     flexDirection: "row",
