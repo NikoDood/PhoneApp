@@ -8,7 +8,15 @@ import {
   Alert,
   StyleSheet,
 } from "react-native";
-import { collection, onSnapshot, setDoc, doc } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  setDoc,
+  doc,
+  where,
+  query,
+  getDocs,
+} from "firebase/firestore";
 import { firestoreDB, auth } from "../../services/firebase";
 import { useRouter } from "expo-router";
 import { Notifications } from "react-native-notifications";
@@ -22,11 +30,27 @@ interface Chat {
 export default function ChatOverview(): JSX.Element {
   const [chats, setChats] = useState<Chat[]>([]);
   const [inviteEmail, setInviteEmail] = useState<string>("");
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+    !!auth.currentUser
+  );
   const router = useRouter();
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setIsAuthenticated(!!user);
+      if (!user) {
+        setChats([]); // Clear chats if user logs out
+      }
+    });
+
+    return () => unsubscribeAuth(); // Cleanup auth listener
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !auth.currentUser) return;
+
     const unsubscribe = onSnapshot(
-      collection(firestoreDB, `users/${auth.currentUser?.uid}/chats`),
+      collection(firestoreDB, `users/${auth.currentUser.uid}/chats`),
       (snapshot) => {
         const chatData = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -36,11 +60,15 @@ export default function ChatOverview(): JSX.Element {
       },
       (error) => {
         console.error("Error fetching chats:", error);
-        Alert.alert("Error", "Failed to load chats.");
+        // No alert needed on logout as it may trigger here
+        if (isAuthenticated) {
+          Alert.alert("Error", "Failed to load chats.");
+        }
       }
     );
-    return unsubscribe; // Cleanup listener on unmount
-  }, []);
+
+    return () => unsubscribe(); // Cleanup Firestore listener on unmount or logout
+  }, [isAuthenticated]);
 
   const handleInvite = async () => {
     if (!inviteEmail) {
@@ -49,44 +77,48 @@ export default function ChatOverview(): JSX.Element {
     }
 
     try {
-      const combinedId =
-        auth.currentUser?.uid! < inviteEmail
-          ? `${auth.currentUser?.uid}-${inviteEmail}`
-          : `${inviteEmail}-${auth.currentUser?.uid}`;
+      const invitedUserQuery = query(
+        collection(firestoreDB, "users"),
+        where("email", "==", inviteEmail)
+      );
+      const querySnapshot = await getDocs(invitedUserQuery);
 
-      // Create chat reference
+      if (querySnapshot.empty) {
+        Alert.alert("Error", "User with this email does not exist.");
+        return;
+      }
+
+      const invitedUserId = querySnapshot.docs[0].id;
+      const combinedId =
+        auth.currentUser?.uid! < invitedUserId
+          ? `${auth.currentUser?.uid}-${invitedUserId}`
+          : `${invitedUserId}-${auth.currentUser?.uid}`;
+
       const chatRef = doc(firestoreDB, `chats`, combinedId);
       await setDoc(chatRef, {
-        users: [auth.currentUser?.uid, inviteEmail],
+        users: [auth.currentUser?.uid, invitedUserId],
         createdAt: new Date(),
-        status: "pending", // Status to indicate pending acceptance
+        status: "pending",
       });
 
-      // Store invite in both users' chats
       await Promise.all(
-        [auth.currentUser?.uid!, inviteEmail].map((userId) =>
+        [auth.currentUser?.uid!, invitedUserId].map((userId) =>
           setDoc(doc(firestoreDB, `users/${userId}/chats`, combinedId), {
             chatId: combinedId,
             otherUser:
-              inviteEmail === userId ? auth.currentUser?.email : inviteEmail,
+              userId === auth.currentUser?.uid
+                ? invitedUserId
+                : auth.currentUser?.uid,
           })
         )
       );
 
-      // Create invite document
       const inviteRef = doc(firestoreDB, `invites`, combinedId);
       await setDoc(inviteRef, {
         from: auth.currentUser?.uid,
-        to: inviteEmail,
+        to: invitedUserId,
         chatId: combinedId,
-        status: "pending", // Invitation status: pending/accepted/declined
-      });
-
-      // Send notification to the invited user
-      Notifications.postLocalNotification({
-        title: "You have a new chat invitation!",
-        body: `${auth.currentUser?.email} has invited you to chat.`,
-        extra: { inviteId: combinedId },
+        status: "pending",
       });
 
       Alert.alert("Success", "Chat invitation sent successfully!");

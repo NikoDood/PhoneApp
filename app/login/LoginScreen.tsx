@@ -10,11 +10,9 @@ import {
 } from "react-native";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../services/firebase";
-//import { NavigationProp, useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 
 export default function LoginScreen() {
-  //const navigation = useNavigation<NavigationProp<any>>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,8 +29,7 @@ export default function LoginScreen() {
       .then(() => {
         console.log("works");
         Alert.alert("Success", "Logged in successfully");
-        //navigation.navigate("");
-        router.push(`/`);
+        router.push(`/`); // Navigate to the home page
       })
       .catch((error) => {
         console.error("Login error:", error);
@@ -41,6 +38,10 @@ export default function LoginScreen() {
       .finally(() => {
         setLoading(false);
       });
+  };
+
+  const handleSignUp = () => {
+    router.push("/signup"); // Navigate to /signup route
   };
 
   return (
@@ -71,6 +72,12 @@ export default function LoginScreen() {
         ) : (
           <Text style={styles.buttonText}>Login</Text>
         )}
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleSignUp} style={styles.signUpContainer}>
+        <Text style={styles.signUpText}>
+          Don't have an account? <Text style={styles.signUpLink}>Sign up</Text>
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -111,5 +118,15 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  signUpContainer: {
+    marginTop: 20,
+  },
+  signUpText: {
+    fontSize: 16,
+    color: "#007bff",
+  },
+  signUpLink: {
+    textDecorationLine: "underline",
   },
 });

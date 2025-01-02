@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   TextInput,
-  Button,
   Alert,
   StyleSheet,
   Text,
@@ -12,18 +11,16 @@ import {
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-} from "firebase/auth"; // Import signIn
+} from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, firestoreDB } from "../../services/firebase";
-import { useNavigation } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useRouter } from "expo-router"; // Using expo-router instead of react-navigation
 
 const SignupScreen: React.FC = () => {
-  const navigation = useNavigation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const router = useRouter(); // Use expo-router for navigation
 
   // Validation function
   const validateInput = () => {
@@ -65,9 +62,8 @@ const SignupScreen: React.FC = () => {
       // Log in the user after signup
       await signInWithEmailAndPassword(auth, email, password);
 
-      // Navigate back
-      //navigation.navigate("Home"); //
-      router.push("/");
+      // Navigate back to home page
+      router.push("/"); // Make sure the route is correct in expo-router
     } catch (error: any) {
       console.error("Signup error:", error);
       if (error.code === "auth/email-already-in-use") {
