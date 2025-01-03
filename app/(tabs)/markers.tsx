@@ -13,7 +13,11 @@ import { useRouter } from "expo-router";
 import { collection, getDocs } from "firebase/firestore";
 import { firestoreDB, auth } from "../../services/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import * as Location from "expo-location"; // Using Expo Location
+import * as Location from "expo-location";
+import {
+  blue,
+  rgbaArrayToRGBAColor,
+} from "react-native-reanimated/lib/typescript/Colors";
 
 interface NoteMarker {
   id: string;
@@ -27,12 +31,16 @@ const AllMarkersMap: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [currentMarkerIndex, setCurrentMarkerIndex] = useState(0);
+  // Copenhagen, Denmark maps location
   const [initialRegion, setInitialRegion] = useState<Region>({
-    latitude: 55.6761, // Default to Copenhagen, Denmark
+    latitude: 55.6761,
     longitude: 12.5683,
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   });
+  const [locationPermissionStatus, setLocationPermissionStatus] =
+    useState<string>("");
+
   const router = useRouter();
   let mapRef = React.useRef<MapView>(null);
 
@@ -87,36 +95,57 @@ const AllMarkersMap: React.FC = () => {
   // Handle the refresh of markers
   const handleRefresh = () => {
     if (userId) {
+      handleLocationButtonClick();
       fetchMarkers(userId);
     }
   };
 
   // Request location permission and set region
+  const getUserLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    setLocationPermissionStatus(status); // Set the permission status
+
+    if (status !== "granted") {
+      Alert.alert("Permission denied", "We need your location to show the map");
+      return;
+    }
+
+    // Get user location
+    const location = await Location.getCurrentPositionAsync({});
+    setInitialRegion({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    });
+  };
+
   useEffect(() => {
-    const getUserLocation = async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission denied",
-          "We need your location to show the map"
-        );
-        return;
-      }
-
-      // Get user location
-      const location = await Location.getCurrentPositionAsync({});
-
-      // Update the region to user's location
-      setInitialRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
-    };
-
-    getUserLocation();
+    getUserLocation(); // Call once on component mount to set the initial region
   }, []);
+
+  const handleLocationButtonClick = async () => {
+    if (locationPermissionStatus !== "granted") {
+      Alert.alert(
+        "Location permission required",
+        "Please enable location services to use this feature.",
+        [
+          {
+            text: "Cancel",
+            onPress: () => {},
+            style: "cancel",
+          },
+          {
+            text: "Enable",
+            onPress: getUserLocation, // Re-request location permission when button clicked
+          },
+        ]
+      );
+    } else {
+      // Already granted permission, just update location
+      await getUserLocation();
+    }
+  };
 
   if (loading) {
     return (
@@ -160,6 +189,15 @@ const AllMarkersMap: React.FC = () => {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Text container for marker info at the top of the screen */}
+      <View style={styles.markerInfoContainer}>
+        <Text style={styles.markerText}>
+          {markers.length
+            ? `Viewing Marker ${currentMarkerIndex + 1} of ${markers.length}`
+            : "No markers available"}
+        </Text>
+      </View>
+
       <MapView
         ref={mapRef}
         style={{ flex: 1 }}
@@ -196,48 +234,38 @@ const AllMarkersMap: React.FC = () => {
           onPress={handlePreviousMarker}
           disabled={!markers.length}
         />
-        <Text style={styles.markerText}>
-          {markers.length
-            ? `Viewing Marker ${currentMarkerIndex + 1} of ${markers.length}`
-            : "No markers available"}
-        </Text>
         <Button
           title="Next"
           onPress={handleNextMarker}
           disabled={!markers.length}
         />
         <Button title="Refresh" onPress={handleRefresh} />
+        <Button title="Get Location" onPress={handleLocationButtonClick} />
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  calloutContainer: {
-    flexDirection: "row",
+  markerInfoContainer: {
+    position: "absolute",
+    top: 20, // Adjust this value to set how far down from the top
+    left: 0,
+    right: 0,
+
     alignItems: "center",
-    padding: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    borderRadius: 8,
-    maxWidth: 200,
+    zIndex: 1, // Ensure it's above the map
+    paddingVertical: 10,
   },
-  calloutText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-    marginRight: 10,
-  },
-  calloutImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 5,
-    resizeMode: "cover",
+  markerText: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: "#000",
+    padding: 5,
   },
   navContainer: {
     position: "absolute",
-    bottom: 20,
-    left: 20,
-    right: 20,
+    bottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -247,40 +275,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     elevation: 5,
   },
-  navButton: {
-    backgroundColor: "#007bff",
-    padding: 12,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  disabledButton: {
-    backgroundColor: "#B0B0B0",
-  },
-  refreshButton: {
-    backgroundColor: "#4CAF50",
-    padding: 12,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  markerText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#fff",
-    flex: 1,
-    textAlign: "center",
-  },
 });
-
 export default AllMarkersMap;
