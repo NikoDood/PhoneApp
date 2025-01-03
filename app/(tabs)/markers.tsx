@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { collection, getDocs } from "firebase/firestore";
 import { firestoreDB, auth } from "../../services/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import * as Location from "expo-location"; // Using Expo Location
 
 interface NoteMarker {
   id: string;
@@ -26,6 +27,12 @@ const AllMarkersMap: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [currentMarkerIndex, setCurrentMarkerIndex] = useState(0);
+  const [initialRegion, setInitialRegion] = useState<Region>({
+    latitude: 55.6761, // Default to Copenhagen, Denmark
+    longitude: 12.5683,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  });
   const router = useRouter();
   let mapRef = React.useRef<MapView>(null);
 
@@ -77,25 +84,45 @@ const AllMarkersMap: React.FC = () => {
     }
   }
 
-  // Refresh markers
+  // Handle the refresh of markers
   const handleRefresh = () => {
     if (userId) {
       fetchMarkers(userId);
     }
   };
 
+  // Request location permission and set region
+  useEffect(() => {
+    const getUserLocation = async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission denied",
+          "We need your location to show the map"
+        );
+        return;
+      }
+
+      // Get user location
+      const location = await Location.getCurrentPositionAsync({});
+
+      // Update the region to user's location
+      setInitialRegion({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      });
+    };
+
+    getUserLocation();
+  }, []);
+
   if (loading) {
     return (
       <ActivityIndicator size="large" color="#0000ff" style={{ flex: 1 }} />
     );
   }
-
-  const initialRegion: Region = {
-    latitude: markers.length ? markers[0].location.latitude : 37.78825,
-    longitude: markers.length ? markers[0].location.longitude : -122.4324,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  };
 
   const handleMarkerPress = (markerId: string) => {
     console.log(markerId);
@@ -139,7 +166,7 @@ const AllMarkersMap: React.FC = () => {
         initialRegion={initialRegion}
         showsUserLocation={true}
       >
-        {markers.map((marker, index) => (
+        {markers.map((marker) => (
           <Marker
             key={marker.id}
             coordinate={{
@@ -162,6 +189,7 @@ const AllMarkersMap: React.FC = () => {
           </Marker>
         ))}
       </MapView>
+
       <View style={styles.navContainer}>
         <Button
           title="Previous"
@@ -185,24 +213,73 @@ const AllMarkersMap: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  calloutContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderRadius: 8,
+    maxWidth: 200,
+  },
+  calloutText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginRight: 10,
+  },
+  calloutImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 5,
+    resizeMode: "cover",
+  },
   navContainer: {
     position: "absolute",
     bottom: 20,
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 10,
-    marginHorizontal: 20,
-    padding: 5,
+    paddingVertical: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.6)", // Transparent black background
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    elevation: 5,
+  },
+  navButton: {
+    backgroundColor: "#007bff",
+    padding: 12,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  disabledButton: {
+    backgroundColor: "#B0B0B0",
+  },
+  refreshButton: {
+    backgroundColor: "#4CAF50",
+    padding: 12,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   markerText: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
+    fontWeight: "500",
+    color: "#fff",
+    flex: 1,
+    textAlign: "center",
   },
 });
 

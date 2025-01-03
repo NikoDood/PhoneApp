@@ -122,6 +122,8 @@ export default function ChatOverview(): JSX.Element {
       const inviteRef = doc(firestoreDB, `invites`, combinedId);
       await setDoc(inviteRef, {
         from: auth.currentUser?.uid,
+        fromEmail: auth.currentUser?.email,
+        toEmail: invitedUserEmail,
         to: invitedUserId,
         chatId: combinedId,
         status: "pending", // Set status to pending in invite document

@@ -297,7 +297,8 @@ export default function NoteTakingApp() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>All notes</Text>
+      <SafeAreaView style={styles.container2}>
         {/* Dismiss keyboard on tap outside input */}
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={{ flex: 1, justifyContent: "space-between" }}>
@@ -319,7 +320,6 @@ export default function NoteTakingApp() {
               />
             </View>
             <KeyboardAvoidingView
-              style={{ flex: 0.15 }}
               behavior={Platform.OS === "ios" ? "padding" : "height"}
             >
               {/* Input and Actions */}
@@ -398,21 +398,28 @@ export default function NoteTakingApp() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 20,
+    backgroundColor: "#f5f5f5",
+  },
+
+  container2: {
+    flex: 1,
     backgroundColor: "#F5F5F5",
   },
-  flatListContainer: {
-    flex: 1, // This will take the remaining space of the screen
-    paddingHorizontal: 10,
-    marginBottom: 10,
-    backgroundColor: "#F5F5F5",
-    marginTop: 50,
+
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 20,
   },
+  flatListContainer: {},
   noteContainer: {
-    backgroundColor: "#fff",
-    marginBottom: 15,
     padding: 15,
-    borderRadius: 10,
-    elevation: 3,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
   },
   noteText: {
     fontSize: 16,
@@ -428,21 +435,15 @@ const styles = StyleSheet.create({
   inputSection: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#ccc",
   },
   textInput: {
     flex: 1,
-    borderColor: "#ccc",
+    padding: 10,
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 40,
-    fontSize: 16,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    backgroundColor: "#fff",
     marginRight: 10,
-    backgroundColor: "#F9F9F9",
   },
   actionButton: {
     width: 40,
@@ -479,7 +480,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0084FF",
     borderRadius: 10,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 10,
   },
   addNoteButtonText: {
     color: "#fff",

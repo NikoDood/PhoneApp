@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { firestoreDB, auth } from "../../services/firebase";
 import {
   doc,
@@ -39,6 +39,7 @@ export default function ChatRoom(): JSX.Element {
   const [receiver, setReceiver] = useState<string | null>(null);
   const [isSender, setIsSender] = useState<boolean>(false);
   const router = useRouter();
+  const navigation = useNavigation();
 
   useEffect(() => {
     const inviteRef = doc(firestoreDB, `invites/${chatId}`);
@@ -48,8 +49,8 @@ export default function ChatRoom(): JSX.Element {
         if (snapshot.exists()) {
           const inviteData = snapshot.data();
           setInviteStatus(inviteData?.status);
-          setSender(inviteData?.from);
-          setReceiver(inviteData?.to);
+          setSender(inviteData?.fromEmail);
+          setReceiver(inviteData?.toEmail);
           setIsSender(inviteData?.from === auth.currentUser?.uid);
         } else {
           console.error("Invite document does not exist.");
@@ -83,6 +84,17 @@ export default function ChatRoom(): JSX.Element {
 
     return unsubscribe;
   }, [chatId]);
+
+  useLayoutEffect(() => {
+    const currentUser = auth.currentUser?.uid;
+    const oppositeUser = currentUser === sender ? receiver : sender;
+
+    if (oppositeUser) {
+      navigation.setOptions({
+        headerTitle: oppositeUser,
+      });
+    }
+  }, [receiver, navigation, router]);
 
   // Handle Accept Invitation
   const handleAccept = async () => {
@@ -260,5 +272,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 5,
     textAlign: "center",
+  },
+  backButton: {
+    marginLeft: 10,
   },
 });

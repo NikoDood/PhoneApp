@@ -6,9 +6,9 @@
     "platforms": ["android", "ios"],
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/coop_notes_logo.jpg",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/coop_notes_logo.jpg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
