@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -17,6 +17,7 @@ import {
   Platform,
   Keyboard,
   TouchableWithoutFeedback,
+  AppState,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
@@ -52,18 +53,48 @@ export default function NoteTakingApp() {
   const [userId, setUserId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [appState, setAppState] = useState(AppState.currentState);
+  const statusUpdatedRef = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserId(user.uid);
+        const userRef = doc(firestoreDB, "users", user.uid);
+        updateDoc(userRef, { status: "online" });
+
         loadNotes(user.uid);
       } else {
         router.push("/login/LoginScreen");
       }
     });
-    return unsubscribe;
-  }, []);
+
+    // Listen to AppState changes (background/foreground)
+    const appStateListener = AppState.addEventListener(
+      "change",
+      (nextAppState) => {
+        if (nextAppState === "background" || nextAppState === "inactive") {
+          if (userId && !statusUpdatedRef.current) {
+            const userRef = doc(firestoreDB, "users", userId);
+            updateDoc(userRef, { status: "offline" });
+            statusUpdatedRef.current = true;
+          }
+        }
+        setAppState(nextAppState);
+      }
+    );
+
+    // Cleanup function for Auth and AppState
+    return () => {
+      unsubscribeAuth(); // Unsubscribe from auth listener
+      appStateListener.remove(); // Remove appState listener when the component unmounts
+
+      if (userId && !statusUpdatedRef.current) {
+        const userRef = doc(firestoreDB, "users", userId);
+        updateDoc(userRef, { status: "offline" }); // Set status to "offline" when the component unmounts
+      }
+    };
+  }, [userId, router, appState]);
 
   const onRefresh = useCallback(() => {
     if (userId) {

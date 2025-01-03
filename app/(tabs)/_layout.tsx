@@ -52,7 +52,7 @@ export default function Layout() {
       <Tabs.Screen
         name="logout"
         options={{
-          title: "Logout",
+          title: "Profile",
           tabBarIcon: (props) => <LogoutIcon color={props.color} />,
         }}
       />
