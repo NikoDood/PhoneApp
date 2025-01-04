@@ -7,6 +7,7 @@ import {
   FlatList,
   StyleSheet,
   Alert,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { firestoreDB, auth } from "../../services/firebase";
@@ -20,6 +21,7 @@ import {
   orderBy,
   getDoc,
   deleteDoc,
+  getDocs,
 } from "firebase/firestore";
 import { Notifications } from "react-native-notifications";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -44,6 +46,9 @@ export default function ChatRoom(): JSX.Element {
   const [chatData, setChatData] = useState(null);
   const [userId, setUserId] = useState(null);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [selectedNote, setSelectedNote] = useState(null);
 
   const router = useRouter();
   const navigation = useNavigation();
@@ -220,6 +225,31 @@ export default function ChatRoom(): JSX.Element {
     }
   };
 
+  async function loadNotes() {
+    try {
+      const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
+      const querySnapshot = await getDocs(userNotesRef);
+      const fetchedNotes = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setNotes(fetchedNotes);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load notes: " + error.message);
+    }
+  }
+
+  function shareNote() {
+    if (!selectedNote) {
+      Alert.alert("Error", "Please select a note first.");
+      return;
+    }
+
+    const noteMessage = `Join my note: "${selectedNote.text}" - Click here: [Note Link Placeholder]`;
+    sendMessage(noteMessage); // sendMessage should handle sending a message in the chat
+    setShowNoteModal(false);
+  }
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -274,6 +304,16 @@ export default function ChatRoom(): JSX.Element {
               >
                 <Text style={styles.menuText}>Leave Chat</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowNoteModal(true);
+                  loadNotes();
+                  setShowActionMenu(false);
+                }}
+              >
+                <Text style={styles.menuText}>Share Note</Text>
+              </TouchableOpacity>
             </View>
           )}
           <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
@@ -292,6 +332,46 @@ export default function ChatRoom(): JSX.Element {
           You can't send a message until the invite is accepted.
         </Text>
       )}
+
+      <Modal
+        visible={showNoteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNoteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowNoteModal(false)}
+            >
+              <Text style={styles.closeButtonText}>✖</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.modalTitle}>Share a Note</Text>
+            <FlatList
+              data={notes}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.noteList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.noteItem,
+                    selectedNote?.id === item.id && styles.selectedNoteItem,
+                  ]}
+                  onPress={() => setSelectedNote(item)}
+                >
+                  <Text style={styles.noteText}>{item.text}</Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity style={styles.shareButton} onPress={shareNote}>
+              <Text style={styles.shareButtonText}>Share Note</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -402,5 +482,76 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginLeft: 10,
+  },
+
+  selectedNoteText: {
+    fontWeight: "bold",
+    color: "#0084FF",
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.64)", // Transparent dark overlay
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: "90%",
+    backgroundColor: "rgba(0, 0, 0, 0.49)",
+    borderRadius: 15,
+    padding: 20,
+    alignItems: "center",
+  },
+  closeButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 10,
+    padding: 10,
+    backgroundColor: "#444", // Subtle background for close button
+    borderRadius: 50,
+  },
+  closeButtonText: {
+    color: "#fff",
+    fontSize: 16,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "rgb(255, 255, 255)",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  noteList: {
+    width: "100%",
+    paddingVertical: 20,
+  },
+  noteItem: {
+    padding: 15,
+    marginVertical: 10,
+    backgroundColor: "#007bff",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  selectedNoteItem: {
+    borderColor: "rgb(255, 255, 255)",
+    borderWidth: 2,
+  },
+  noteText: {
+    fontSize: 16,
+    textAlign: "center",
+    color: "rgb(255, 255, 255)",
+  },
+  shareButton: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    backgroundColor: "#007bff",
+    borderRadius: 10,
+  },
+  shareButtonText: {
+    fontWeight: "bold",
+    fontSize: 16,
+    color: "rgb(255, 255, 255)",
   },
 });
