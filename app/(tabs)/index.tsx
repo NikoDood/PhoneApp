@@ -30,6 +30,7 @@ import {
   updateDoc,
   writeBatch,
   orderBy,
+  where,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -41,6 +42,7 @@ import { useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import DraggableFlatList from "react-native-draggable-flatlist";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { TabView, SceneMap } from "react-native-tab-view";
 
 export default function NoteTakingApp() {
   const [note, setNote] = useState("");
@@ -101,36 +103,31 @@ export default function NoteTakingApp() {
       setRefreshing(true);
       loadNotes(userId).then(() => setRefreshing(false));
     } else {
-      setRefreshing(false); // Stop the refresh indicator if userId is missing
+      setRefreshing(false);
     }
   }, [userId]);
 
-  const handleDragEnd = useCallback(
-    async ({ data }) => {
-      // Use a cloned array to avoid mutating original state
-      const clonedData = data.map((item, index) => ({
-        ...item,
-        position: index,
-      }));
+  const handleDragEnd = useCallback(async ({ data }) => {
+    const clonedData = data.map((item, index) => ({
+      ...item,
+      position: index,
+    }));
 
-      setNotes(clonedData);
+    setNotes(clonedData);
 
-      // Save the new order to Firestore
-      const batch = writeBatch(firestoreDB);
-      clonedData.forEach((note) => {
-        const noteRef = doc(firestoreDB, `users/${userId}/notes/${note.id}`);
-        batch.update(noteRef, { position: note.position });
-      });
+    const batch = writeBatch(firestoreDB);
+    clonedData.forEach((note) => {
+      const noteRef = doc(firestoreDB, `notes/${note.id}`);
+      batch.update(noteRef, { position: note.position });
+    });
 
-      try {
-        await batch.commit();
-        Alert.alert("Notes order saved!");
-      } catch (error) {
-        Alert.alert("Failed to save order", error.message);
-      }
-    },
-    [userId]
-  );
+    try {
+      await batch.commit();
+      Alert.alert("Notes order saved!");
+    } catch (error) {
+      Alert.alert("Failed to save order", error.message);
+    }
+  }, []);
 
   // Function to pick an image from the galleryss
   async function pickImage() {
@@ -236,17 +233,19 @@ export default function NoteTakingApp() {
     }
 
     try {
-      const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
+      const globalNotesRef = collection(firestoreDB, "notes");
 
       const highestPosition = notes.length
         ? Math.max(...notes.map((n) => n.position))
         : -1;
 
-      const newNoteRef = await addDoc(userNotesRef, {
+      const newNoteRef = await addDoc(globalNotesRef, {
         text: note,
         imageUrl: null,
         audioUrl: null,
         createdAt: new Date(),
+        owner: userId,
+        Participants: [userId],
         position: highestPosition + 1,
       });
 
@@ -254,14 +253,17 @@ export default function NoteTakingApp() {
       const audioUrl = await uploadAudio(newNoteRef.id);
 
       if (imageUrl || audioUrl) {
-        await updateDoc(
-          doc(firestoreDB, `users/${userId}/notes/${newNoteRef.id}`),
-          {
-            imageUrl,
-            audioUrl,
-          }
-        );
+        await updateDoc(doc(firestoreDB, `notes/${newNoteRef.id}`), {
+          imageUrl,
+          audioUrl,
+        });
       }
+
+      const userSharedRef = collection(
+        firestoreDB,
+        `users/${userId}/sharedNotes`
+      );
+      await addDoc(userSharedRef, { noteId: newNoteRef.id });
 
       setNotes([
         ...notes,
@@ -289,15 +291,36 @@ export default function NoteTakingApp() {
 
   async function loadNotes(userId) {
     try {
-      const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
-      const q = query(userNotesRef, orderBy("position", "asc"));
-      const querySnapshot = await getDocs(q);
+      // Fetch shared notes subcollection for the user
+      const sharedNotesRef = collection(
+        firestoreDB,
+        `users/${userId}/sharedNotes`
+      );
+      const sharedSnapshot = await getDocs(sharedNotesRef);
+      const sharedNoteIds = sharedSnapshot.docs.map((doc) => doc.data().noteId);
 
-      const loadedNotes = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setNotes(loadedNotes);
+      if (sharedNoteIds.length === 0) {
+        setNotes([]);
+        return;
+      }
+
+      // Fetch all notes from the global notes collection
+      const globalNotesRef = collection(firestoreDB, "notes");
+      const querySnapshot = await getDocs(globalNotesRef);
+
+      // Filter the fetched notes to include only those in sharedNoteIds
+      const loadedNotes = querySnapshot.docs
+        .filter((doc) => sharedNoteIds.includes(doc.id))
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+      // Sort the notes by position or createdAt
+      const sortedNotes = loadedNotes.sort(
+        (a, b) => a.position - b.position || a.createdAt - b.createdAt
+      );
+      setNotes(sortedNotes);
     } catch (error) {
       Alert.alert("Failed to load notes", error.message);
     }
@@ -350,8 +373,11 @@ export default function NoteTakingApp() {
                 }
               />
             </View>
+
+            {/* KeyboardAvoidingView */}
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={{ marginBottom: 20 }} // Add space for iOS when the keyboard is visible
             >
               {/* Input and Actions */}
               <View style={styles.inputSection}>
@@ -410,6 +436,7 @@ export default function NoteTakingApp() {
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
+
             {/* Preview Section */}
             {image && (
               <View style={styles.previewContainer}>
@@ -432,18 +459,18 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#f5f5f5",
   },
-
   container2: {
     flex: 1,
     backgroundColor: "#F5F5F5",
   },
-
   title: {
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 20,
   },
-  flatListContainer: {},
+  flatListContainer: {
+    height: "70%",
+  },
   noteContainer: {
     padding: 15,
     backgroundColor: "#fff",
@@ -458,7 +485,7 @@ const styles = StyleSheet.create({
   },
   noteImage: {
     width: "100%",
-    height: 200,
+    height: 100,
     marginTop: 10,
     borderRadius: 8,
     resizeMode: "cover",
@@ -526,8 +553,8 @@ const styles = StyleSheet.create({
     borderTopColor: "#ccc",
   },
   imagePreview: {
-    width: 100,
-    height: 100,
+    width: 50,
+    height: 50,
     marginBottom: 10,
     borderRadius: 10,
   },

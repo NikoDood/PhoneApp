@@ -76,7 +76,8 @@ export default function RootLayout() {
         <Stack.Screen
           name="note/[id]"
           options={{
-            headerShown: false,
+            title: "Go Back",
+            headerShown: true,
           }}
         />
         <Stack.Screen

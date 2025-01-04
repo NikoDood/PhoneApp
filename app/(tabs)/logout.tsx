@@ -110,6 +110,7 @@ const SettingsTab: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.label}>Click to change</Text>
       <TouchableOpacity onPress={handlePickImage}>
         <Image
           source={
@@ -193,7 +194,7 @@ const styles = StyleSheet.create({
     width: "100%",
     padding: 15,
     borderRadius: 8,
-    backgroundColor: "#ff4d4d",
+    backgroundColor: "#007bff",
     alignItems: "center",
     marginTop: 20,
   },

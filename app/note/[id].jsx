@@ -17,7 +17,7 @@ import { onAuthStateChanged } from "firebase/auth";
 
 export default function NoteDetail() {
   const { id } = useLocalSearchParams();
-  console.log("Working id" + id);
+  console.log("Working id: " + id);
   const router = useRouter();
   const [noteText, setNoteText] = useState("");
   const [imageUrl, setImageUrl] = useState(null);
@@ -29,7 +29,7 @@ export default function NoteDetail() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserId(user.uid);
-        loadNote(user.uid);
+        loadNote();
       } else {
         router.push("/login/LoginScreen");
       }
@@ -37,11 +37,9 @@ export default function NoteDetail() {
     return unsubscribe;
   }, [router]);
 
-  async function loadNote(userId) {
+  async function loadNote() {
     try {
-      const noteDoc = await getDoc(
-        doc(firestoreDB, `users/${userId}/notes`, id)
-      );
+      const noteDoc = await getDoc(doc(firestoreDB, `notes`, id));
       if (noteDoc.exists()) {
         const noteData = noteDoc.data();
         setNoteText(noteData.text);
@@ -57,7 +55,7 @@ export default function NoteDetail() {
 
   async function saveNote() {
     try {
-      await updateDoc(doc(firestoreDB, `users/${userId}/notes`, id), {
+      await updateDoc(doc(firestoreDB, `notes`, id), {
         text: noteText,
         location: location,
       });
@@ -70,7 +68,7 @@ export default function NoteDetail() {
 
   async function deleteNote() {
     try {
-      await deleteDoc(doc(firestoreDB, `users/${userId}/notes`, id));
+      await deleteDoc(doc(firestoreDB, `notes`, id));
       Alert.alert("Note deleted successfully!");
       router.push("/"); // Redirect to notes list or home after deletion
     } catch (error) {
@@ -104,14 +102,14 @@ export default function NoteDetail() {
         )}
       </View>
 
-      {/* MapView loading coords into */}
+      {/* MapView */}
       <MapView
         style={styles.map}
         initialRegion={{
-          latitude: location?.latitude || 37.78825,
-          longitude: location?.longitude || -122.4324,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+          latitude: 55.6761,
+          longitude: 12.5683,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
         }}
         onLongPress={handleMapLongPress}
       >

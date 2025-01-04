@@ -63,11 +63,11 @@ const AllMarkersMap: React.FC = () => {
   }, [userId]);
 
   // Fetch markers from Firestore
-  async function fetchMarkers(userId: string) {
+  async function fetchMarkers() {
     try {
       setLoading(true);
-      const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
-      const querySnapshot = await getDocs(userNotesRef);
+      const notesRef = collection(firestoreDB, "notes");
+      const querySnapshot = await getDocs(notesRef);
 
       const loadedMarkers: NoteMarker[] = querySnapshot.docs
         .map((doc) => {

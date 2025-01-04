@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Modal,
+  ScrollView,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { firestoreDB, auth } from "../../services/firebase";
@@ -41,6 +42,7 @@ export default function ChatRoom(): JSX.Element {
   const [inviteStatus, setInviteStatus] = useState<string>("");
   const [sender, setSender] = useState<string | null>(null);
   const [receiver, setReceiver] = useState<string | null>(null);
+  const [receiverId, setReceiverId] = useState<string | null>(null);
   const [isSender, setIsSender] = useState<boolean>(false);
   const [hasLeft, setHasLeft] = useState<boolean>(false); // Track if the user has left the chat
   const [chatData, setChatData] = useState(null);
@@ -49,9 +51,15 @@ export default function ChatRoom(): JSX.Element {
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [notes, setNotes] = useState([]);
   const [selectedNote, setSelectedNote] = useState(null);
+  const flatListRef = useRef(null);
 
   const router = useRouter();
   const navigation = useNavigation();
+
+  useEffect(() => {
+    // Scroll to the bottom when the component mounts (initial load)
+    flatListRef.current?.scrollToEnd({ animated: false });
+  }, []);
 
   useEffect(() => {
     const inviteRef = doc(firestoreDB, `invites/${chatId}`);
@@ -63,6 +71,8 @@ export default function ChatRoom(): JSX.Element {
           setInviteStatus(inviteData?.status);
           setSender(inviteData?.fromEmail);
           setReceiver(inviteData?.toEmail);
+
+          setReceiverId(inviteData?.to);
 
           setIsSender(inviteData?.from === auth.currentUser?.uid);
 
@@ -119,11 +129,10 @@ export default function ChatRoom(): JSX.Element {
   useLayoutEffect(() => {
     const currentUser = auth.currentUser?.uid;
     setUserId(currentUser);
-    const oppositeUser = currentUser === sender ? receiver : sender;
 
-    if (oppositeUser) {
+    if (receiver) {
       navigation.setOptions({
-        headerTitle: oppositeUser,
+        headerTitle: receiver,
       });
     }
   }, [receiver, navigation, router]);
@@ -149,8 +158,13 @@ export default function ChatRoom(): JSX.Element {
   };
 
   // Send Message Functionality
-  const sendMessage = async () => {
-    if (newMessage.trim() === "") {
+  async function sendMessage(customMessage = null) {
+    // Use the customMessage if provided, otherwise fall back to newMessage
+    const messageToSend = customMessage?.trim() || newMessage.trim();
+
+    console.log(messageToSend + " msg before sending");
+
+    if (messageToSend === "") {
       Alert.alert("Error", "Message cannot be empty.");
       return;
     }
@@ -166,7 +180,7 @@ export default function ChatRoom(): JSX.Element {
     try {
       const messageRef = collection(firestoreDB, `chats/${chatId}/messages`);
       const newMessageData = {
-        text: newMessage,
+        text: messageToSend,
         sender: auth.currentUser?.uid,
         createdAt: new Date(),
       };
@@ -177,7 +191,7 @@ export default function ChatRoom(): JSX.Element {
       console.error("Error sending message:", error);
       Alert.alert("Error", "Failed to send the message.");
     }
-  };
+  }
 
   // Handle Leave Chat
   const handleLeaveChat = async () => {
@@ -225,20 +239,25 @@ export default function ChatRoom(): JSX.Element {
     }
   };
 
+  async function sendCustomMsg(customMsg: string) {
+    await sendMessage(customMsg);
+  }
+
   async function loadNotes() {
     try {
-      const userNotesRef = collection(firestoreDB, `users/${userId}/notes`);
-      const querySnapshot = await getDocs(userNotesRef);
-      const fetchedNotes = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const notesRef = collection(firestoreDB, "notes");
+      const querySnapshot = await getDocs(notesRef);
+      const fetchedNotes = querySnapshot.docs
+        .filter((doc) => doc.data().owner === userId) // Filter by notes owned by the current user
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
       setNotes(fetchedNotes);
     } catch (error) {
       Alert.alert("Error", "Failed to load notes: " + error.message);
     }
   }
-
   async function shareNote() {
     if (!selectedNote) {
       Alert.alert("Error", "Please select a note first.");
@@ -246,28 +265,25 @@ export default function ChatRoom(): JSX.Element {
     }
 
     const noteMessage = `Join my note: "${selectedNote.text}" - Click here: [Note Link Placeholder]`;
-    await setNewMessage(noteMessage + " The note shared");
 
-    console.log(newMessage);
-    await sendMessage(); // sendMessage handles sending the message in the chat
+    console.log(newMessage + "Custom message to be sent");
+    // sendMessage handles sending the message in the chat
     setShowNoteModal(false);
 
     try {
       // Add the receiver to the note's Participants field
-      const noteRef = doc(
-        firestoreDB,
-        `users/${userId}/notes/${selectedNote.id}`
-      );
+      const noteRef = doc(firestoreDB, `notes/${selectedNote.id}`);
       const noteDoc = await getDoc(noteRef);
 
       if (noteDoc.exists()) {
         const currentParticipants = noteDoc.data().Participants || [];
         const updatedParticipants = [
-          ...new Set([...currentParticipants, receiver]),
+          ...new Set([...currentParticipants, receiverId]),
         ];
 
         await updateDoc(noteRef, { Participants: updatedParticipants });
         Alert.alert("Success", "Note shared successfully!");
+        await sendCustomMsg(noteMessage + " The note shared");
       } else {
         Alert.alert("Error", "Note does not exist.");
       }
@@ -294,7 +310,13 @@ export default function ChatRoom(): JSX.Element {
             <Text style={styles.messageText}>{item.text}</Text>
           </View>
         )}
+        contentContainerStyle={{ paddingBottom: 10 }} // Optional: add some padding at the bottom to prevent items from being cut off
+        ref={flatListRef} // Referencing the FlatList
+        onContentSizeChange={() =>
+          flatListRef.current.scrollToEnd({ animated: true })
+        } // Scrolls to the bottom on content change
       />
+
       {inviteStatus === "pending" && !isSender && (
         <Text style={styles.pendingStatus}>
           Invitation Pending <Icon name="spinner" size={14} color="gray" />
@@ -312,7 +334,7 @@ export default function ChatRoom(): JSX.Element {
             style={styles.input}
             placeholder="Type a message"
             value={newMessage}
-            onChangeText={setNewMessage}
+            onChangeText={setNewMessage} // Ensure this is updating the newMessage state
           />
           <TouchableOpacity
             style={styles.actionButton}
@@ -343,7 +365,10 @@ export default function ChatRoom(): JSX.Element {
               </TouchableOpacity>
             </View>
           )}
-          <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+          <TouchableOpacity
+            style={styles.sendButton}
+            onPress={() => sendMessage(newMessage)} // Use newMessage directly here
+          >
             <Text style={styles.sendButtonText}>Send</Text>
           </TouchableOpacity>
         </View>
@@ -377,22 +402,28 @@ export default function ChatRoom(): JSX.Element {
             </TouchableOpacity>
 
             <Text style={styles.modalTitle}>Share a Note</Text>
-            <FlatList
-              data={notes}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.noteList}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.noteItem,
-                    selectedNote?.id === item.id && styles.selectedNoteItem,
-                  ]}
-                  onPress={() => setSelectedNote(item)}
-                >
-                  <Text style={styles.noteText}>{item.text}</Text>
-                </TouchableOpacity>
-              )}
-            />
+
+            {/* Scrollable Content */}
+            <ScrollView style={styles.modalContent}>
+              <FlatList
+                data={notes}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.noteList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.noteItem,
+                      selectedNote?.id === item.id && styles.selectedNoteItem,
+                    ]}
+                    onPress={() => setSelectedNote(item)}
+                  >
+                    <Text style={styles.noteText}>{item.text}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </ScrollView>
+
+            {/* Share Button */}
             <TouchableOpacity style={styles.shareButton} onPress={shareNote}>
               <Text style={styles.shareButtonText}>Share Note</Text>
             </TouchableOpacity>
@@ -523,7 +554,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalContainer: {
-    width: "90%",
+    width: "80%", // Adjust modal width as needed
+    maxHeight: "80%",
     backgroundColor: "rgba(0, 0, 0, 0.49)",
     borderRadius: 15,
     padding: 20,
@@ -568,6 +600,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     color: "rgb(255, 255, 255)",
+  },
+  modalContent: {
+    maxHeight: "70%", // Allow this part to scroll
   },
   shareButton: {
     marginTop: 20,
