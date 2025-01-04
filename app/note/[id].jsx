@@ -28,13 +28,14 @@ export default function NoteDetail() {
   const [noteText, setNoteText] = useState("");
   const [imageUrl, setImageUrl] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [owner, setOwner] = useState(null);
   const [location, setLocation] = useState(null);
-  const [index, setIndex] = useState(0); // TabView index
+  const [index, setIndex] = useState(0);
   const [routes] = useState([
     { key: "edit", title: "Edit Note" },
     { key: "map", title: "Map" },
   ]);
-  const [isModalVisible, setIsModalVisible] = useState(false); // State for modal visibility
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -56,6 +57,7 @@ export default function NoteDetail() {
         setNoteText(noteData.text);
         setImageUrl(noteData.imageUrl || null);
         setLocation(noteData.location || null);
+        setOwner(noteData.owner);
       } else {
         Alert.alert("Error", "Note not found");
       }
@@ -67,10 +69,10 @@ export default function NoteDetail() {
   async function saveNote(updatedText) {
     try {
       await updateDoc(doc(firestoreDB, `notes`, id), {
-        text: updatedText, // Use the passed value
+        text: updatedText,
         location: location,
       });
-      setNoteText(updatedText); // Update parent state to reflect saved changes
+      setNoteText(updatedText);
       Alert.alert("Note updated successfully!");
     } catch (error) {
       Alert.alert("Error saving note", error.message);
@@ -78,7 +80,7 @@ export default function NoteDetail() {
   }
 
   async function confirmDeleteNote() {
-    setIsModalVisible(false); // Close modal
+    setIsModalVisible(false);
     try {
       await deleteDoc(doc(firestoreDB, `notes`, id));
       Alert.alert("Note deleted successfully!");
@@ -94,20 +96,22 @@ export default function NoteDetail() {
   };
 
   const EditNoteTab = React.memo(() => {
-    const [localNoteText, setLocalNoteText] = useState(noteText); // Local state for the text
-    const inputRef = useRef(null); // Reference to the TextInput
+    const [localNoteText, setLocalNoteText] = useState(noteText);
+    const inputRef = useRef(null);
 
     useEffect(() => {
-      setLocalNoteText(noteText); // Sync local state with parent state
+      // Sync local state with parent tab state
+      setLocalNoteText(noteText);
     }, [noteText]);
 
     const handleSave = () => {
-      Keyboard.dismiss(); // Dismiss the keyboard
-      saveNote(localNoteText); // Use localNoteText directly
+      // Dismiss the keyboard trying to fix saving issue
+      Keyboard.dismiss();
+      saveNote(localNoteText);
     };
 
     const handleSubmitEditing = () => {
-      setNoteText(localNoteText); // Sync the text when submitted
+      setNoteText(localNoteText);
     };
 
     return (
@@ -117,10 +121,10 @@ export default function NoteDetail() {
           style={styles.noteInput}
           value={localNoteText}
           onChangeText={setLocalNoteText}
-          onSubmitEditing={handleSubmitEditing} // Triggered when the user submits input
+          onSubmitEditing={handleSubmitEditing}
           placeholder="Edit your note here..."
           multiline
-          returnKeyType="done" // Customize the keyboard return key
+          returnKeyType="done"
         />
         {imageUrl && (
           <Image source={{ uri: imageUrl }} style={styles.noteImage} />
@@ -128,12 +132,14 @@ export default function NoteDetail() {
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Save Changes</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => setIsModalVisible(true)}
-        >
-          <Text style={styles.deleteButtonText}>Delete Note</Text>
-        </TouchableOpacity>
+        {owner == userId && (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => setIsModalVisible(true)}
+          >
+            <Text style={styles.deleteButtonText}>Delete Note</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   });

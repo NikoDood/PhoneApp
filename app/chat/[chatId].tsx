@@ -27,12 +27,23 @@ import {
 import { Notifications } from "react-native-notifications";
 import Icon from "react-native-vector-icons/FontAwesome";
 
+import { OpenAI } from "openai";
+
 interface Message {
   id: string;
   text: string;
   sender: string;
   createdAt: Date;
 }
+
+const apiKey = "d8a133054a4740c0b396f6a8c756b14d";
+const baseURL = "https://api.aimlapi.com/v1";
+const systemPrompt = "Be descriptive and helpful";
+
+const api = new OpenAI({
+  apiKey,
+  baseURL,
+});
 
 export default function ChatRoom(): JSX.Element {
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
@@ -45,7 +56,7 @@ export default function ChatRoom(): JSX.Element {
   const [receiverId, setReceiverId] = useState<string | null>(null);
   const [senderId, setSenderId] = useState<string | null>(null);
   const [isSender, setIsSender] = useState<boolean>(false);
-  const [hasLeft, setHasLeft] = useState<boolean>(false); // Track if the user has left the chat
+  const [hasLeft, setHasLeft] = useState<boolean>(false);
   const [chatData, setChatData] = useState(null);
   const [userId, setUserId] = useState(null);
   const [showActionMenu, setShowActionMenu] = useState(false);
@@ -61,6 +72,19 @@ export default function ChatRoom(): JSX.Element {
     // Scroll to the bottom when the component mounts (initial load)
     flatListRef.current?.scrollToEnd({ animated: false });
   }, []);
+
+  const fetchAIResponse = async (userPrompt: string) => {
+    const response = await api.chat.completions.create({
+      model: "mistralai/Mistral-7B-Instruct-v0.2",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 256,
+    });
+    return response.choices[0].message.content;
+  };
 
   useEffect(() => {
     const inviteRef = doc(firestoreDB, `invites/${chatId}`);
@@ -130,14 +154,21 @@ export default function ChatRoom(): JSX.Element {
     const currentUser = auth.currentUser?.uid;
     setUserId(currentUser);
 
-    if (receiver) {
+    let OppositeUserMail;
+    if (receiverId == auth.currentUser?.uid) {
+      OppositeUserMail = sender;
+    } else {
+      OppositeUserMail = receiver;
+    }
+
+    if (OppositeUserMail) {
       navigation.setOptions({
-        headerTitle: receiver,
+        headerTitle: OppositeUserMail,
       });
     }
   }, [receiver, navigation, router]);
 
-  // Handle Accept Invitation
+  // Handle Initial Accept Invitation
   const handleAccept = async () => {
     if (isSender) {
       Alert.alert("Error", "You cannot accept your own invitation.");
@@ -157,12 +188,9 @@ export default function ChatRoom(): JSX.Element {
     }
   };
 
-  // Send Message Functionality
+  // Send Message Functionality :)
   async function sendMessage(customMessage = null) {
-    // Use the customMessage if provided, otherwise fall back to newMessage
     const messageToSend = customMessage?.trim() || newMessage.trim();
-
-    console.log(messageToSend + " msg before sending");
 
     if (messageToSend === "") {
       Alert.alert("Error", "Message cannot be empty.");
@@ -177,23 +205,29 @@ export default function ChatRoom(): JSX.Element {
       return;
     }
 
-    try {
-      const messageRef = collection(firestoreDB, `chats/${chatId}/messages`);
-      const newMessageData = {
-        text: messageToSend,
-        sender: auth.currentUser?.uid,
-        createdAt: new Date(),
-      };
+    if (messageToSend.startsWith("!ai")) {
+      // Handle AI request from "https://docs.aimlapi.com/quickstart/setting-up"
+      const aiResponse = await fetchAIResponse(messageToSend.slice(4).trim());
+      await sendMessage(aiResponse);
+    } else {
+      try {
+        const messageRef = collection(firestoreDB, `chats/${chatId}/messages`);
+        const newMessageData = {
+          text: messageToSend,
+          sender: auth.currentUser?.uid,
+          createdAt: new Date(),
+        };
 
-      await addDoc(messageRef, newMessageData);
-      setNewMessage(""); // Clear the input field after sending the message
-    } catch (error) {
-      console.error("Error sending message:", error);
-      Alert.alert("Error", "Failed to send the message.");
+        await addDoc(messageRef, newMessageData);
+        setNewMessage("");
+      } catch (error) {
+        console.error("Error sending message:", error);
+        Alert.alert("Error", "Failed to send the message.");
+      }
     }
   }
 
-  // Handle Leave Chat
+  // Handle Leave Chat part
   const handleLeaveChat = async () => {
     try {
       if (!chatData || !chatData.users || !userId) return;
@@ -217,19 +251,19 @@ export default function ChatRoom(): JSX.Element {
       const chatRef = doc(firestoreDB, `chats/${chatId}`);
       await updateDoc(chatRef, {
         users: updatedUsers,
-        leftUsers: updatedLeftUsers, // Add the user to the leftUsers array
+        leftUsers: updatedLeftUsers,
       });
 
       // Step 3: Remove chat from the user's chat list
       const userChatRef = doc(firestoreDB, `users/${userId}/chats/${chatId}`);
       await deleteDoc(userChatRef);
 
-      // Optionally: If the chat is empty (no more users), you can set status to "inactive"
+      // If the chat is empty (no more users here) then set status to "inactive"
       if (updatedUsers.length === 0) {
         await updateDoc(chatRef, { status: "inactive" });
       }
 
-      setHasLeft(true); // Mark the user as having left the chat
+      setHasLeft(true);
 
       Alert.alert("Success", "You have left the chat.");
       router.back();
@@ -248,7 +282,7 @@ export default function ChatRoom(): JSX.Element {
       const notesRef = collection(firestoreDB, "notes");
       const querySnapshot = await getDocs(notesRef);
       const fetchedNotes = querySnapshot.docs
-        .filter((doc) => doc.data().owner === userId) // Filter by notes owned by the current user
+        .filter((doc) => doc.data().owner === userId)
         .map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -267,11 +301,11 @@ export default function ChatRoom(): JSX.Element {
     const noteMessage = `Join my note: "${selectedNote.text}" - Click here: [Note Link Placeholder]`;
 
     console.log(newMessage + "Custom message to be sent");
-    // sendMessage handles sending the message in the chat
+
     setShowNoteModal(false);
 
     try {
-      // Add the receiver to the note's Participants field
+      // Add the receiver to the note Participants field
       const noteRef = doc(firestoreDB, `notes/${selectedNote.id}`);
       const noteDoc = await getDoc(noteRef);
 
@@ -318,11 +352,11 @@ export default function ChatRoom(): JSX.Element {
             <Text style={styles.messageText}>{item.text}</Text>
           </View>
         )}
-        contentContainerStyle={{ paddingBottom: 10 }} // Optional: add some padding at the bottom to prevent items from being cut off
-        ref={flatListRef} // Referencing the FlatList
+        contentContainerStyle={{ paddingBottom: 10 }}
+        ref={flatListRef}
         onContentSizeChange={() =>
           flatListRef.current.scrollToEnd({ animated: true })
-        } // Scrolls to the bottom on content change
+        }
       />
 
       {inviteStatus === "pending" && !isSender && (
@@ -342,11 +376,11 @@ export default function ChatRoom(): JSX.Element {
             style={styles.input}
             placeholder="Type a message"
             value={newMessage}
-            onChangeText={setNewMessage} // Ensure this is updating the newMessage state
+            onChangeText={setNewMessage}
           />
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => setShowActionMenu((prev) => !prev)} // Toggle state
+            onPress={() => setShowActionMenu((prev) => !prev)}
           >
             <Text style={styles.actionButtonText}>+</Text>
           </TouchableOpacity>
@@ -375,7 +409,7 @@ export default function ChatRoom(): JSX.Element {
           )}
           <TouchableOpacity
             style={styles.sendButton}
-            onPress={() => sendMessage(newMessage)} // Use newMessage directly here
+            onPress={() => sendMessage(newMessage)}
           >
             <Text style={styles.sendButtonText}>Send</Text>
           </TouchableOpacity>
@@ -401,7 +435,7 @@ export default function ChatRoom(): JSX.Element {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            {/* Close Button */}
+            {/* Modal Close Button */}
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowNoteModal(false)}
@@ -411,7 +445,7 @@ export default function ChatRoom(): JSX.Element {
 
             <Text style={styles.modalTitle}>Share a Note</Text>
 
-            {/* FlatList without ScrollView */}
+            {/* The loaded notes */}
             <FlatList
               data={notes}
               keyExtractor={(item) => item.id}
@@ -429,7 +463,6 @@ export default function ChatRoom(): JSX.Element {
               )}
             />
 
-            {/* Share Button */}
             <TouchableOpacity style={styles.shareButton} onPress={shareNote}>
               <Text style={styles.shareButtonText}>Share Note</Text>
             </TouchableOpacity>
