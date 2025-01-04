@@ -239,15 +239,42 @@ export default function ChatRoom(): JSX.Element {
     }
   }
 
-  function shareNote() {
+  async function shareNote() {
     if (!selectedNote) {
       Alert.alert("Error", "Please select a note first.");
       return;
     }
 
     const noteMessage = `Join my note: "${selectedNote.text}" - Click here: [Note Link Placeholder]`;
-    sendMessage(noteMessage); // sendMessage should handle sending a message in the chat
+    await setNewMessage(noteMessage + " The note shared");
+
+    console.log(newMessage);
+    await sendMessage(); // sendMessage handles sending the message in the chat
     setShowNoteModal(false);
+
+    try {
+      // Add the receiver to the note's Participants field
+      const noteRef = doc(
+        firestoreDB,
+        `users/${userId}/notes/${selectedNote.id}`
+      );
+      const noteDoc = await getDoc(noteRef);
+
+      if (noteDoc.exists()) {
+        const currentParticipants = noteDoc.data().Participants || [];
+        const updatedParticipants = [
+          ...new Set([...currentParticipants, receiver]),
+        ];
+
+        await updateDoc(noteRef, { Participants: updatedParticipants });
+        Alert.alert("Success", "Note shared successfully!");
+      } else {
+        Alert.alert("Error", "Note does not exist.");
+      }
+    } catch (error) {
+      console.error("Error updating note participants:", error);
+      Alert.alert("Error", "Failed to share the note.");
+    }
   }
 
   return (
