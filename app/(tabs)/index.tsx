@@ -18,6 +18,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   AppState,
+  useWindowDimensions,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
@@ -44,7 +45,7 @@ import DraggableFlatList from "react-native-draggable-flatlist";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { TabView, SceneMap } from "react-native-tab-view";
 
-export default function NoteTakingApp() {
+const FirstRoute = () => {
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState([]);
   const [image, setImage] = useState(null);
@@ -452,7 +453,137 @@ export default function NoteTakingApp() {
       </SafeAreaView>
     </GestureHandlerRootView>
   );
+};
+
+const SecondRoute = () => {
+  const [sharedNotes, setSharedNotes] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+        loadSharedNotes(user.uid);
+      } else {
+        router.push("/login/LoginScreen");
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+    };
+  }, [router]);
+
+  function handlePressNote(noteId) {
+    const path = "/note/" + noteId;
+    router.push(path);
+  }
+
+  const onRefresh = useCallback(() => {
+    if (userId) {
+      setRefreshing(true);
+      loadSharedNotes(userId).then(() => setRefreshing(false));
+    } else {
+      setRefreshing(false);
+    }
+  }, [userId]);
+
+  const loadSharedNotes = async (userId) => {
+    try {
+      const globalNotesRef = collection(firestoreDB, "notes");
+      const querySnapshot = await getDocs(globalNotesRef);
+
+      const loadedSharedNotes = querySnapshot.docs
+        .map((doc) => {
+          const note = doc.data();
+          const noteId = doc.id;
+          // Check if the user is part of the participants and is not the owner
+          if (note.Participants.includes(userId) && note.owner !== userId) {
+            return { id: noteId, ...note };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      setSharedNotes(loadedSharedNotes);
+    } catch (error) {
+      Alert.alert("Failed to load shared notes", error.message);
+    }
+  };
+
+  const renderItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.noteContainer}
+      onPress={() => handlePressNote(item.id)}
+    >
+      <Text style={styles.noteText}>{item.text}</Text>
+      {item.imageUrl && (
+        <Image source={{ uri: item.imageUrl }} style={styles.noteImage} />
+      )}
+      {item.audioUrl && (
+        <Button
+          title="Play Audio"
+          onPress={async () => {
+            const { sound } = await Audio.Sound.createAsync({
+              uri: item.audioUrl,
+            });
+            await sound.playAsync();
+          }}
+        />
+      )}
+    </TouchableOpacity>
+  );
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container2}>
+        <Text style={styles.title}>Shared Notes</Text>
+        <View style={styles.flatListContainer}>
+          <FlatList
+            data={sharedNotes}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#0000ff"]}
+                tintColor="#0000ff"
+              />
+            }
+          />
+        </View>
+      </SafeAreaView>
+    </GestureHandlerRootView>
+  );
+};
+
+const renderScene = SceneMap({
+  first: FirstRoute,
+  second: SecondRoute,
+});
+
+export default function NoteTakingApp() {
+  const layout = useWindowDimensions();
+  const [index, setIndex] = React.useState(0);
+
+  const routes = [
+    { key: "first", title: "Personal notes" },
+    { key: "second", title: "Shared with me" },
+  ];
+
+  return (
+    <TabView
+      navigationState={{ index, routes }}
+      renderScene={renderScene}
+      onIndexChange={setIndex}
+      initialLayout={{ width: layout.width }}
+    />
+  );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

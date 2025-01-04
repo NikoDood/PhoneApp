@@ -93,6 +93,14 @@ export default function RootLayout() {
             gestureEnabled: false,
           }}
         />
+
+        <Stack.Screen
+          name="signup/index"
+          options={{
+            title: "Back to login",
+            gestureEnabled: false,
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );

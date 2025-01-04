@@ -43,6 +43,7 @@ export default function ChatRoom(): JSX.Element {
   const [sender, setSender] = useState<string | null>(null);
   const [receiver, setReceiver] = useState<string | null>(null);
   const [receiverId, setReceiverId] = useState<string | null>(null);
+  const [senderId, setSenderId] = useState<string | null>(null);
   const [isSender, setIsSender] = useState<boolean>(false);
   const [hasLeft, setHasLeft] = useState<boolean>(false); // Track if the user has left the chat
   const [chatData, setChatData] = useState(null);
@@ -73,10 +74,9 @@ export default function ChatRoom(): JSX.Element {
           setReceiver(inviteData?.toEmail);
 
           setReceiverId(inviteData?.to);
+          setSenderId(inviteData?.from);
 
           setIsSender(inviteData?.from === auth.currentUser?.uid);
-
-          console.log(isSender);
         } else {
           console.error("Invite document does not exist.");
         }
@@ -275,11 +275,19 @@ export default function ChatRoom(): JSX.Element {
       const noteRef = doc(firestoreDB, `notes/${selectedNote.id}`);
       const noteDoc = await getDoc(noteRef);
 
+      let shareWithUser;
+      if (receiverId == auth.currentUser?.uid) {
+        shareWithUser = senderId;
+      } else {
+        shareWithUser = receiverId;
+      }
+
       if (noteDoc.exists()) {
         const currentParticipants = noteDoc.data().Participants || [];
         const updatedParticipants = [
-          ...new Set([...currentParticipants, receiverId]),
+          ...new Set([...currentParticipants, shareWithUser]),
         ];
+        console.log(shareWithUser + "IMPORTANT!!!!");
 
         await updateDoc(noteRef, { Participants: updatedParticipants });
         Alert.alert("Success", "Note shared successfully!");
@@ -403,25 +411,23 @@ export default function ChatRoom(): JSX.Element {
 
             <Text style={styles.modalTitle}>Share a Note</Text>
 
-            {/* Scrollable Content */}
-            <ScrollView style={styles.modalContent}>
-              <FlatList
-                data={notes}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.noteList}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.noteItem,
-                      selectedNote?.id === item.id && styles.selectedNoteItem,
-                    ]}
-                    onPress={() => setSelectedNote(item)}
-                  >
-                    <Text style={styles.noteText}>{item.text}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            </ScrollView>
+            {/* FlatList without ScrollView */}
+            <FlatList
+              data={notes}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.noteList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.noteItem,
+                    selectedNote?.id === item.id && styles.selectedNoteItem,
+                  ]}
+                  onPress={() => setSelectedNote(item)}
+                >
+                  <Text style={styles.noteText}>{item.text}</Text>
+                </TouchableOpacity>
+              )}
+            />
 
             {/* Share Button */}
             <TouchableOpacity style={styles.shareButton} onPress={shareNote}>
