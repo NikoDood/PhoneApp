@@ -44,8 +44,8 @@ const SettingsTab: React.FC = () => {
         Alert.alert("Error", "User data not found.");
       }
     } catch (error: any) {
-      console.error("Error fetching user data:", error);
-      Alert.alert("Error", error.message);
+      console.log("Error fetching user data:", error);
+      console.log("Error", error.message);
     } finally {
       setLoading(false);
     }
@@ -63,8 +63,8 @@ const SettingsTab: React.FC = () => {
       });
       Alert.alert("Success", "Profile updated successfully.");
     } catch (error: any) {
-      console.error("Error updating profile:", error);
-      Alert.alert("Error", error.message);
+      console.log("Error updating profile:", error);
+      console.log("Error", error.message);
     } finally {
       setUpdating(false);
     }
@@ -76,8 +76,8 @@ const SettingsTab: React.FC = () => {
       Alert.alert("Success", "Logged out successfully");
       router.replace("/login/LoginScreen");
     } catch (error: any) {
-      console.error("Logout error:", error);
-      Alert.alert("Logout error", error.message);
+      console.log("Logout error:", error);
+      console.log("Logout error", error.message);
     }
   };
 

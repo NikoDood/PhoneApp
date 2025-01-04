@@ -24,7 +24,7 @@ import {
 import { firestoreDB, auth } from "../../services/firebase";
 import { useRouter } from "expo-router";
 import { Notifications } from "react-native-notifications";
-import Icon from "react-native-vector-icons/FontAwesome"; // Make sure this import is correct
+import Icon from "react-native-vector-icons/FontAwesome";
 import { TabView, SceneMap } from "react-native-tab-view";
 
 const FirstRoute = () => {
@@ -37,7 +37,7 @@ const FirstRoute = () => {
       where("leftUsers", "array-contains", auth.currentUser?.uid)
     );
 
-    // Subscribe to real-time updates using onSnapshot
+    // Subscribe to real-time updates using onSnapshot from firebase fetching chat
     const unsubscribe = onSnapshot(
       q,
       (querySnapshot) => {
@@ -46,8 +46,8 @@ const FirstRoute = () => {
           ...doc.data(),
         }));
 
-        console.log(chatsData); // Logs the current state of the chats
-        setChats(chatsData); // Update the state with the new data
+        console.log(chatsData);
+        setChats(chatsData);
       },
       (error) => {
         console.error("Error fetching chats:", error);
@@ -55,7 +55,6 @@ const FirstRoute = () => {
       }
     );
 
-    // Cleanup the listener when the component unmounts
     return () => {
       unsubscribe();
     };
@@ -153,11 +152,12 @@ const SecondRoute = () => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       setIsAuthenticated(!!user);
       if (!user) {
-        setChats([]); // Clear chats if user logs out
+        // Clear chats if user logs out (was an issue before)
+        setChats([]);
       }
     });
 
-    return () => unsubscribeAuth(); // Cleanup auth listener
+    return () => unsubscribeAuth();
   }, []);
 
   useEffect(() => {
@@ -187,56 +187,6 @@ const SecondRoute = () => {
     fetchLeavedChats();
   }, [isAuthenticated]);
 
-  const handleRejoinChat = async (chatId: string) => {
-    try {
-      // Get the reference to the chat document
-      const chatRef = doc(firestoreDB, `chats/${chatId}`);
-
-      // Fetch the chat document
-      const chatDoc = await getDoc(chatRef);
-
-      // Check if the document exists
-      if (!chatDoc.exists()) {
-        Alert.alert("Error", "Chat does not exist.");
-        return;
-      }
-
-      const chatData = chatDoc.data(); // Access the data of the chat document
-
-      // Check if the user is already in the chat
-      if (!chatData.users || chatData.users.includes(auth.currentUser?.uid)) {
-        Alert.alert("Error", "You are already part of this chat.");
-        return;
-      }
-
-      // Rejoin the chat by adding the user back to the users array
-      await updateDoc(chatRef, {
-        users: [...chatData.users, auth.currentUser?.uid], // Add the user back to the chat
-        leftUsers: chatData.leftUsers.filter(
-          (id) => id !== auth.currentUser?.uid
-        ), // Remove the user from leftUsers
-      });
-
-      // Add the chat back to the user's chat list
-      const userChatRef = doc(
-        firestoreDB,
-        `users/${auth.currentUser?.uid}/chats`,
-        chatId
-      );
-      await setDoc(userChatRef, {
-        chatId: chatId,
-        otherUser: chatData.userEmails.find(
-          (email) => email !== auth.currentUser?.email
-        ), // Get the other user's email
-      });
-
-      Alert.alert("Success", "You have rejoined the chat.");
-    } catch (error) {
-      console.error("Error rejoining chat:", error);
-      Alert.alert("Error", "Failed to rejoin the chat.");
-    }
-  };
-
   useEffect(() => {
     if (!isAuthenticated || !auth.currentUser) return;
 
@@ -257,12 +207,12 @@ const SecondRoute = () => {
           if (!otherUserDoc.empty) {
             const otherUserData = otherUserDoc.docs[0].data();
 
-            // Add status field to chat data
+            // Adding the status field to chat data
             return {
               ...chatData,
               name: otherUserData.name || otherUserData.email,
               profileImg: otherUserData.profileImg || null,
-              status: otherUserData.status, // Add online/offline status
+              status: otherUserData.status,
             };
           }
 
@@ -309,13 +259,14 @@ const SecondRoute = () => {
           ? `${auth.currentUser?.uid}-${invitedUserId}`
           : `${invitedUserId}-${auth.currentUser?.uid}`;
 
-      // Create a chat reference in Firestore
+      // Create a chat reference in Firestore for the inital chat
+      // Set status to pending when creating the chat so other user has to accept
       const chatRef = doc(firestoreDB, `chats`, combinedId);
       await setDoc(chatRef, {
         users: [auth.currentUser?.uid, invitedUserId],
         createdAt: new Date(),
-        status: "pending", // Set status to pending when creating the chat
-        userEmails: [auth.currentUser?.email, invitedUserEmail], // Add emails to chat document
+        status: "pending",
+        userEmails: [auth.currentUser?.email, invitedUserEmail],
       });
 
       await Promise.all(
@@ -329,7 +280,7 @@ const SecondRoute = () => {
           })
         )
       );
-
+      // Set status to pending in invite document for the invite collection
       const inviteRef = doc(firestoreDB, `invites`, combinedId);
       await setDoc(inviteRef, {
         from: auth.currentUser?.uid,
@@ -337,7 +288,7 @@ const SecondRoute = () => {
         toEmail: invitedUserEmail,
         to: invitedUserId,
         chatId: combinedId,
-        status: "pending", // Set status to pending in invite document
+        status: "pending",
       });
 
       Alert.alert("Success", "Chat invitation sent successfully!");
@@ -360,12 +311,9 @@ const SecondRoute = () => {
 
   const renderChatItem = ({ item }: { item: Chat }) => (
     <TouchableOpacity
-      style={[
-        styles.chatItem,
-        item.status === "pending" && styles.pendingChat, // Apply background for pending chats
-      ]}
-      onPress={() => openChat(item.chatId, item.status)} // Pass status to handle pending state
-      disabled={item.status === "pending"} // Disable the chat if status is pending
+      style={[styles.chatItem, item.status === "pending" && styles.pendingChat]}
+      onPress={() => openChat(item.chatId, item.status)}
+      disabled={item.status === "pending"}
     >
       <Image
         source={
@@ -403,7 +351,7 @@ const SecondRoute = () => {
           </Text>
         )}
 
-        {/* Show green circle if the user is online */}
+        {/* Show green circle if the user is online (not fully working the online part) */}
 
         {item.status === "pending" && (
           <Icon
@@ -466,7 +414,6 @@ export default function ChatOverview() {
 }
 
 const styles = StyleSheet.create({
-  // Add the styles for your new "Leaved Chats" section
   container: {
     flex: 1,
     padding: 20,
@@ -512,7 +459,7 @@ const styles = StyleSheet.create({
   },
 
   dingChat: {
-    backgroundColor: "#f0f0f0", // Change background for pending chats
+    backgroundColor: "#f0f0f0",
   },
   profileImg: {
     width: 40,

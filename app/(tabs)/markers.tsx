@@ -44,7 +44,7 @@ const AllMarkersMap: React.FC = () => {
   const router = useRouter();
   let mapRef = React.useRef<MapView>(null);
 
-  // authentication state
+  // authentication state (can be removed but im scared to mess up)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -62,7 +62,7 @@ const AllMarkersMap: React.FC = () => {
     }
   }, [userId]);
 
-  // Fetch markers from Firestore
+  // Fetch markers part
   async function fetchMarkers() {
     try {
       setLoading(true);
@@ -92,7 +92,7 @@ const AllMarkersMap: React.FC = () => {
     }
   }
 
-  // Handle the refresh of markers
+  // Handle the refresh of markers when button clicked
   const handleRefresh = () => {
     if (userId) {
       handleLocationButtonClick();
@@ -100,17 +100,16 @@ const AllMarkersMap: React.FC = () => {
     }
   };
 
-  // Request location permission and set region
+  // Request location permission and set region from device
   const getUserLocation = async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
-    setLocationPermissionStatus(status); // Set the permission status
+    setLocationPermissionStatus(status);
 
     if (status !== "granted") {
       Alert.alert("Permission denied", "We need your location to show the map");
       return;
     }
 
-    // Get user location
     const location = await Location.getCurrentPositionAsync({});
     setInitialRegion({
       latitude: location.coords.latitude,
@@ -121,7 +120,7 @@ const AllMarkersMap: React.FC = () => {
   };
 
   useEffect(() => {
-    getUserLocation(); // Call once on component mount to set the initial region
+    getUserLocation();
   }, []);
 
   const handleLocationButtonClick = async () => {
@@ -137,12 +136,12 @@ const AllMarkersMap: React.FC = () => {
           },
           {
             text: "Enable",
-            onPress: getUserLocation, // Re-request location permission when button clicked
+            onPress: getUserLocation,
           },
         ]
       );
     } else {
-      // Already granted permission, just update location
+      // Already granted permission and just update location so user dont have to do it again :)
       await getUserLocation();
     }
   };
@@ -249,12 +248,12 @@ const AllMarkersMap: React.FC = () => {
 const styles = StyleSheet.create({
   markerInfoContainer: {
     position: "absolute",
-    top: 20, // Adjust this value to set how far down from the top
+    top: 20,
     left: 0,
     right: 0,
 
     alignItems: "center",
-    zIndex: 1, // Ensure it's above the map
+    zIndex: 1,
     paddingVertical: 10,
   },
   markerText: {
@@ -270,7 +269,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.6)", // Transparent black background
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     borderRadius: 15,
     paddingHorizontal: 15,
     elevation: 5,

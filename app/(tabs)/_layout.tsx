@@ -13,6 +13,7 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 export default function Layout() {
   const colorScheme = useColorScheme();
 
+  // This controls buttom part (tab part) :)
   return (
     <Tabs
       backBehavior="history"

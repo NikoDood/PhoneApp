@@ -9,12 +9,12 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import "react-native-reanimated";
-import { auth } from "../services/firebase"; // Ensure the path is correct
+import { auth } from "../services/firebase";
 import { useRouter } from "expo-router";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
+// Prevent the splash screen from auto-hiding before asset loading is complete (fixed issue from before)
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -49,7 +49,7 @@ export default function RootLayout() {
   }, [loaded]);
 
   if (!loaded || isAuthenticated === null) {
-    // Show loading spinner while checking auth state
+    // Show loading spinner while checking auth state :)
     return (
       <View
         style={{
@@ -62,7 +62,7 @@ export default function RootLayout() {
       </View>
     );
   }
-
+  // This is the top tabs part
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack>
@@ -80,12 +80,7 @@ export default function RootLayout() {
             headerShown: true,
           }}
         />
-        <Stack.Screen
-          name="chat/[id]"
-          options={{
-            headerShown: false,
-          }}
-        />
+
         <Stack.Screen
           name="login/LoginScreen"
           options={{

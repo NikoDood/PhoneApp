@@ -14,13 +14,13 @@ import {
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, firestoreDB } from "../../services/firebase";
-import { useRouter } from "expo-router"; // Using expo-router instead of react-navigation
+import { useRouter } from "expo-router";
 
 const SignupScreen: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter(); // Use expo-router for navigation
+  const router = useRouter();
 
   // Validation function
   const validateInput = () => {
@@ -37,9 +37,9 @@ const SignupScreen: React.FC = () => {
     return true;
   };
 
-  // Handle signup
+  // Handle signup part
   const handleSignup = async () => {
-    // Validate input before moving on
+    // Some simple validate input before moving on :)
     if (!validateInput()) return;
 
     setLoading(true);
@@ -51,7 +51,7 @@ const SignupScreen: React.FC = () => {
       );
       const user = userCredential.user;
 
-      // Create a user in Firestore
+      // Create a user in Firestore here
       await setDoc(doc(firestoreDB, "users", user.uid), {
         email: user.email,
         createdAt: new Date(),
@@ -63,7 +63,7 @@ const SignupScreen: React.FC = () => {
       await signInWithEmailAndPassword(auth, email, password);
 
       // Navigate back to home page
-      router.push("/"); // Make sure the route is correct in expo-router
+      router.push("/");
     } catch (error: any) {
       console.error("Signup error:", error);
       if (error.code === "auth/email-already-in-use") {

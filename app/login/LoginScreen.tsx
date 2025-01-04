@@ -30,7 +30,7 @@ export default function LoginScreen() {
         console.log("works");
         Alert.alert("Success", "Logged in successfully");
 
-        // Replace the login screen with the home page
+        // go to home after login
         router.replace("/");
       })
       .catch((error) => {
@@ -43,7 +43,7 @@ export default function LoginScreen() {
   };
 
   const handleSignUp = () => {
-    router.push("/signup"); // Navigate to /signup route
+    router.push("/signup");
   };
 
   return (

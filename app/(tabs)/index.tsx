@@ -73,7 +73,7 @@ const FirstRoute = () => {
       }
     });
 
-    // Listen to AppState changes (background/foreground)
+    // Beta feature (not working) - Listen to AppState changes (background/foreground) - https://reactnative.dev/docs/appstate
     const appStateListener = AppState.addEventListener(
       "change",
       (nextAppState) => {
@@ -88,14 +88,14 @@ const FirstRoute = () => {
       }
     );
 
-    // Cleanup function for Auth and AppState
     return () => {
-      unsubscribeAuth(); // Unsubscribe from auth listener
-      appStateListener.remove(); // Remove appState listener when the component unmounts
+      unsubscribeAuth();
+      appStateListener.remove();
 
       if (userId && !statusUpdatedRef.current) {
         const userRef = doc(firestoreDB, "users", userId);
-        updateDoc(userRef, { status: "offline" }); // Set status to "offline" when the component unmounts
+        // Set users status to "offline" when the component unmounts and after cleanup
+        updateDoc(userRef, { status: "offline" });
       }
     };
   }, [userId, router, appState]);
@@ -131,7 +131,7 @@ const FirstRoute = () => {
     }
   }, []);
 
-  // Function to pick an image from the galleryss
+  // Function to pick an image from the gallery
   async function pickImage() {
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -299,7 +299,7 @@ const FirstRoute = () => {
         `users/${userId}/sharedNotes`
       );
 
-      // Set up a real-time listener on the shared notes
+      // Set up a real-time listener on the shared notes using firebase snapshot
       const unsubscribe = onSnapshot(sharedNotesRef, async (sharedSnapshot) => {
         const sharedNoteIds = sharedSnapshot.docs.map(
           (doc) => doc.data().noteId
@@ -313,7 +313,7 @@ const FirstRoute = () => {
         // Reference to the global notes collection
         const globalNotesRef = collection(firestoreDB, "notes");
 
-        // Query only the shared notes
+        // Query only the shared notes here
         const notesQuery = query(
           globalNotesRef,
           where("__name__", "in", sharedNoteIds)
@@ -326,7 +326,7 @@ const FirstRoute = () => {
             ...doc.data(),
           }));
 
-          // Sort the notes by position or createdAt
+          // Sorting the notes by position or createdAt
           const sortedNotes = loadedNotes.sort(
             (a, b) => a.position - b.position || a.createdAt - b.createdAt
           );
@@ -334,7 +334,6 @@ const FirstRoute = () => {
         });
       });
 
-      // Return the unsubscribe function to allow cleanup when the component unmounts
       return unsubscribe;
     } catch (error) {
       Alert.alert("Failed to load notes", error.message);
@@ -381,7 +380,7 @@ const FirstRoute = () => {
                 refreshControl={
                   <RefreshControl
                     refreshing={refreshing}
-                    onRefresh={onRefresh} // Make sure this function fetches new data
+                    onRefresh={onRefresh}
                     colors={["#0000ff"]}
                     tintColor="#0000ff"
                   />
@@ -389,12 +388,12 @@ const FirstRoute = () => {
               />
             </View>
 
-            {/* KeyboardAvoidingView */}
+            {/* KeyboardAvoidingView idk if does anything? remove? */}
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={{ marginBottom: 20 }} // Add space for iOS when the keyboard is visible
+              style={{ marginBottom: 20 }}
             >
-              {/* Input and Actions */}
+              {/* Input and Actions bar */}
               <View style={styles.inputSection}>
                 <TextInput
                   style={styles.textInput}
@@ -407,12 +406,12 @@ const FirstRoute = () => {
                 {/* "+" Button for Action Menu */}
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => setShowActionMenu((prev) => !prev)} // Toggle state
+                  onPress={() => setShowActionMenu((prev) => !prev)}
                 >
                   <Text style={styles.actionButtonText}>+</Text>
                 </TouchableOpacity>
 
-                {/* Action Menu */}
+                {/* Action Menu popup for button */}
                 {showActionMenu && (
                   <View style={styles.actionMenu}>
                     <TouchableOpacity
@@ -452,7 +451,7 @@ const FirstRoute = () => {
               </View>
             </KeyboardAvoidingView>
 
-            {/* Preview Section */}
+            {/* Preview image part */}
             {image && (
               <View style={styles.previewContainer}>
                 <Image source={{ uri: image }} style={styles.imagePreview} />
