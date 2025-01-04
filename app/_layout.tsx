@@ -26,20 +26,20 @@ export default function RootLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    // Listen for authentication state changes
+    // Listen for authentication state
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setIsAuthenticated(!!user);
 
       if (!user) {
-        // Redirect to login if unauthenticated
-        router.replace("/login/LoginScreen"); // Replace the route, clearing the stack
+        // Replace the route, clearing the stack on new session !?
+        router.replace("/login/LoginScreen");
       } else {
-        // If the user is authenticated, continue to the desired screen
-        router.replace("/home"); // Replace with the home screen or the main page
+        // If authenticated go to home
+        router.replace("/home");
       }
     });
 
-    return () => unsubscribe(); // Cleanup on unmount
+    return () => unsubscribe();
   }, [router]);
 
   useEffect(() => {

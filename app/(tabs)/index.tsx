@@ -32,6 +32,7 @@ import {
   writeBatch,
   orderBy,
   where,
+  onSnapshot,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -292,36 +293,49 @@ const FirstRoute = () => {
 
   async function loadNotes(userId) {
     try {
-      // Fetch shared notes subcollection for the user
+      // Reference to the shared notes subcollection for the user
       const sharedNotesRef = collection(
         firestoreDB,
         `users/${userId}/sharedNotes`
       );
-      const sharedSnapshot = await getDocs(sharedNotesRef);
-      const sharedNoteIds = sharedSnapshot.docs.map((doc) => doc.data().noteId);
 
-      if (sharedNoteIds.length === 0) {
-        setNotes([]);
-        return;
-      }
+      // Set up a real-time listener on the shared notes
+      const unsubscribe = onSnapshot(sharedNotesRef, async (sharedSnapshot) => {
+        const sharedNoteIds = sharedSnapshot.docs.map(
+          (doc) => doc.data().noteId
+        );
 
-      // Fetch all notes from the global notes collection
-      const globalNotesRef = collection(firestoreDB, "notes");
-      const querySnapshot = await getDocs(globalNotesRef);
+        if (sharedNoteIds.length === 0) {
+          setNotes([]);
+          return;
+        }
 
-      // Filter the fetched notes to include only those in sharedNoteIds
-      const loadedNotes = querySnapshot.docs
-        .filter((doc) => sharedNoteIds.includes(doc.id))
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        // Reference to the global notes collection
+        const globalNotesRef = collection(firestoreDB, "notes");
 
-      // Sort the notes by position or createdAt
-      const sortedNotes = loadedNotes.sort(
-        (a, b) => a.position - b.position || a.createdAt - b.createdAt
-      );
-      setNotes(sortedNotes);
+        // Query only the shared notes
+        const notesQuery = query(
+          globalNotesRef,
+          where("__name__", "in", sharedNoteIds)
+        );
+
+        // Real-time listener on the filtered notes
+        onSnapshot(notesQuery, (notesSnapshot) => {
+          const loadedNotes = notesSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+
+          // Sort the notes by position or createdAt
+          const sortedNotes = loadedNotes.sort(
+            (a, b) => a.position - b.position || a.createdAt - b.createdAt
+          );
+          setNotes(sortedNotes);
+        });
+      });
+
+      // Return the unsubscribe function to allow cleanup when the component unmounts
+      return unsubscribe;
     } catch (error) {
       Alert.alert("Failed to load notes", error.message);
     }
