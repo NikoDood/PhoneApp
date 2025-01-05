@@ -66,16 +66,30 @@ export default function NoteDetail() {
     }
   }
 
+  const isValidLocation = (loc) =>
+    loc &&
+    typeof loc === "object" &&
+    "latitude" in loc &&
+    "longitude" in loc &&
+    typeof loc.latitude === "number" &&
+    typeof loc.longitude === "number";
+
   async function saveNote(updatedText) {
     try {
+      const textToSave =
+        typeof updatedText === "string" ? updatedText : noteText; // Default to current noteText if none is passed
+      const locationToSave = isValidLocation(location) ? location : null;
+
       await updateDoc(doc(firestoreDB, `notes`, id), {
-        text: updatedText,
-        location: location,
+        text: textToSave,
+        location: locationToSave,
       });
-      setNoteText(updatedText);
+
+      setNoteText(textToSave); // Update local state
       Alert.alert("Note updated successfully!");
     } catch (error) {
       Alert.alert("Error saving note", error.message);
+      console.error(error.message);
     }
   }
 
@@ -87,6 +101,7 @@ export default function NoteDetail() {
       router.push("/");
     } catch (error) {
       Alert.alert("Error deleting note", error.message);
+      console.error(error.message);
     }
   }
 
@@ -120,8 +135,8 @@ export default function NoteDetail() {
           ref={inputRef}
           style={styles.noteInput}
           value={localNoteText}
-          onChangeText={setLocalNoteText}
-          onSubmitEditing={handleSubmitEditing}
+          onChangeText={(text) => setLocalNoteText(text)} // Always store plain text
+          onSubmitEditing={() => saveNote(localNoteText)} // Pass the current string directly
           placeholder="Edit your note here..."
           multiline
           returnKeyType="done"
@@ -158,7 +173,10 @@ export default function NoteDetail() {
       >
         {location && <Marker coordinate={location} />}
       </MapView>
-      <TouchableOpacity style={styles.saveButton} onPress={saveNote}>
+      <TouchableOpacity
+        style={styles.saveButton}
+        onPress={() => saveNote(noteText)}
+      >
         <Text style={styles.saveButtonText}>Save Location</Text>
       </TouchableOpacity>
     </View>
