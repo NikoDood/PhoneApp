@@ -15,6 +15,7 @@ import {
 import { doc, setDoc } from "firebase/firestore";
 import { auth, firestoreDB } from "../../services/firebase";
 import { useRouter } from "expo-router";
+import styles from "../../styling/signup";
 
 const SignupScreen: React.FC = () => {
   const [email, setEmail] = useState("");

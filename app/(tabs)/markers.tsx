@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -43,7 +43,7 @@ const AllMarkersMap: React.FC = () => {
     useState<string>("");
 
   const router = useRouter();
-  let mapRef = React.useRef<MapView>(null);
+  let mapRef = useRef<MapView>(null);
 
   // authentication state (can be removed but im scared to mess up)
   useEffect(() => {

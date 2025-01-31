@@ -1,27 +1,22 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
-import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
-import { View, ActivityIndicator } from "react-native";
-import "react-native-reanimated";
-import { auth } from "../services/firebase";
-import { useRouter } from "expo-router";
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { useFonts } from 'expo-font';
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
+import 'react-native-reanimated';
 
-import { useColorScheme } from "@/hooks/useColorScheme";
+import { useColorScheme } from '@/hooks/useColorScheme';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete (fixed issue from before)
+// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
-    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+<<<<<<< Updated upstream
+=======
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const router = useRouter();
 
@@ -31,16 +26,16 @@ export default function RootLayout() {
       setIsAuthenticated(!!user);
 
       if (!user) {
-        // Replace the route, clearing the stack on new session !?
+        // Replace the route, clearing the stack on new session !? Important here
         router.replace("/login/LoginScreen");
       } else {
-        // If authenticated go to home
-        router.replace("/home");
+        router.replace("/");
       }
     });
 
     return () => unsubscribe();
   }, [router]);
+>>>>>>> Stashed changes
 
   useEffect(() => {
     if (loaded) {
@@ -48,54 +43,15 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded || isAuthenticated === null) {
-    // Show loading spinner while checking auth state :)
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#007bff" />
-      </View>
-    );
+  if (!loaded) {
+    return null;
   }
-  // This is the top tabs part
+
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            headerShown: false,
-          }}
-        />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
-        <Stack.Screen
-          name="note/[id]"
-          options={{
-            title: "Go Back",
-            headerShown: true,
-          }}
-        />
-
-        <Stack.Screen
-          name="login/LoginScreen"
-          options={{
-            headerShown: false,
-            gestureEnabled: false,
-          }}
-        />
-
-        <Stack.Screen
-          name="signup/index"
-          options={{
-            title: "Back to login",
-            gestureEnabled: false,
-          }}
-        />
       </Stack>
     </ThemeProvider>
   );

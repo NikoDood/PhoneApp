@@ -182,6 +182,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "rgb(255, 255, 255)",
   },
+
+  text: {
+    color: "blue",
+    textDecorationLine: "underline",
+  },
 });
 
 export default styles;

@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { firestoreDB, auth } from "../../services/firebase";
@@ -299,7 +300,7 @@ export default function ChatRoom(): JSX.Element {
       return;
     }
 
-    const noteMessage = `Join my note: "${selectedNote.text}" - Click here: [Note Link Placeholder]`;
+    const noteMessage = `Join my note: "${selectedNote.text}" - Click here to view: note/${selectedNote.id}`;
 
     console.log(newMessage + "Custom message to be sent");
 
@@ -336,6 +337,53 @@ export default function ChatRoom(): JSX.Element {
     }
   }
 
+  const renderMessageText = (text) => {
+    // Not good at regex but theese should work :)
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const pathRegex = /note\/[a-zA-Z0-9]+/g;
+    const parts = [];
+    let lastIndex = 0;
+
+    // Combine both regex checks and handle URLs + paths >>>>
+    const processMatch = (match, index, isUrl) => {
+      if (index > lastIndex) {
+        parts.push(text.slice(lastIndex, index));
+      }
+      if (isUrl) {
+        parts.push(
+          <TouchableOpacity key={index} onPress={() => Linking.openURL(match)}>
+            <Text style={{ color: "blue" }}>{match}</Text>
+          </TouchableOpacity>
+        );
+      } else {
+        parts.push(
+          <TouchableOpacity
+            key={index}
+            onPress={() => router.push(`/note/${match.split("/")[1]}`)}
+          >
+            <Text style={{ color: "blue" }}>{match}</Text>
+          </TouchableOpacity>
+        );
+      }
+      lastIndex = index + match.length;
+    };
+
+    // First, check for URLs
+    text.replace(urlRegex, (match, index) => processMatch(match, index, true));
+
+    // Then, check for internal paths like note/123
+    text.replace(pathRegex, (match, index) =>
+      processMatch(match, index, false)
+    );
+
+    // Add the remaining part of the text after the last URL or path
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : <Text>{text}</Text>;
+  };
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -350,7 +398,9 @@ export default function ChatRoom(): JSX.Element {
                 : styles.receivedMessage,
             ]}
           >
-            <Text style={styles.messageText}>{item.text}</Text>
+            <Text style={styles.messageText}>
+              {renderMessageText(item.text)}
+            </Text>
           </View>
         )}
         contentContainerStyle={{ paddingBottom: 10 }}

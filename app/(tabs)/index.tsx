@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -10,283 +10,195 @@ import {
   Alert,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Keyboard,
-  TouchableWithoutFeedback,
-  AppState,
-  useWindowDimensions,
+  ActivityIndicator, // Loader indicator
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Audio } from "expo-av";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  query,
-  updateDoc,
-  writeBatch,
-  orderBy,
-  where,
-  onSnapshot,
-} from "firebase/firestore";
+import { ref, push, onValue, update } from "firebase/database";
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
-import { firestoreDB, storage, auth } from "../../services/firebase";
+import { database, storage } from "../../services/firebase.js"; // Firebase configuration
 import { useRouter } from "expo-router";
-import { onAuthStateChanged } from "firebase/auth";
-import DraggableFlatList from "react-native-draggable-flatlist";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { TabView, SceneMap } from "react-native-tab-view";
-import styles from "../../styling/index";
 
-const FirstRoute = () => {
+export default function NoteTakingApp() {
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState([]);
   const [image, setImage] = useState(null);
-  const [audio, setAudio] = useState(null);
-  const [recording, setRecording] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [imageSelected, setImageSelected] = useState(false); // To indicate image selection
+  const [uploading, setUploading] = useState(false); // For showing loader
   const router = useRouter();
-  const [userId, setUserId] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showActionMenu, setShowActionMenu] = useState(false);
-  const [appState, setAppState] = useState(AppState.currentState);
-  const statusUpdatedRef = useRef(false);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-        const userRef = doc(firestoreDB, "users", user.uid);
-        updateDoc(userRef, { status: "online" });
-
-        loadNotes(user.uid);
-      } else {
-        router.push("/login/LoginScreen");
-      }
-    });
-
-    // Beta feature (not working) - Listen to AppState changes (background/foreground) - https://reactnative.dev/docs/appstate
-    const appStateListener = AppState.addEventListener(
-      "change",
-      (nextAppState) => {
-        if (nextAppState === "background" || nextAppState === "inactive") {
-          if (userId && !statusUpdatedRef.current) {
-            const userRef = doc(firestoreDB, "users", userId);
-            updateDoc(userRef, { status: "offline" });
-            statusUpdatedRef.current = true;
-          }
-        }
-        setAppState(nextAppState);
-      }
-    );
-
-    return () => {
-      unsubscribeAuth();
-      appStateListener.remove();
-
-      if (userId && !statusUpdatedRef.current) {
-        const userRef = doc(firestoreDB, "users", userId);
-        // Set users status to "offline" when the component unmounts and after cleanup
-        updateDoc(userRef, { status: "offline" });
-      }
-    };
-  }, [userId, router, appState]);
-
-  const onRefresh = useCallback(() => {
-    if (userId) {
-      setRefreshing(true);
-      loadNotes(userId).then(() => setRefreshing(false));
-    } else {
-      setRefreshing(false);
-    }
-  }, [userId]);
-
-  const handleDragEnd = useCallback(async ({ data }) => {
-    const clonedData = data.map((item, index) => ({
-      ...item,
-      position: index,
-    }));
-
-    setNotes(clonedData);
-
-    const batch = writeBatch(firestoreDB);
-    clonedData.forEach((note) => {
-      const noteRef = doc(firestoreDB, `notes/${note.id}`);
-      batch.update(noteRef, { position: note.position });
-    });
-
-    try {
-      await batch.commit();
-      Alert.alert("Notes order saved!");
-    } catch (error) {
-      Alert.alert("Failed to save order", error.message);
-    }
+    loadNotes();
   }, []);
 
-  // Function to pick an image from the gallery
-  async function pickImage() {
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission to access gallery is required!");
-      return;
-    }
-
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 1,
-    });
-
-    if (!pickerResult.canceled && pickerResult.assets[0].uri) {
-      setImage(pickerResult.assets[0].uri);
-    }
-  }
-
-  // Function to capture an image with the camera
   async function takeImage() {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission to access camera is required!");
-      return;
-    }
-
-    const cameraResult = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 1,
-    });
-
-    if (!cameraResult.canceled && cameraResult.assets[0].uri) {
-      setImage(cameraResult.assets[0].uri);
-    }
-  }
-
-  async function startRecording() {
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert("Microphone permission is required! :)");
+      const permissionResult =
+        await ImagePicker.requestCameraPermissionsAsync();
+      if (permissionResult.granted === false) {
+        Alert.alert(
+          "Permission required",
+          "Permission to access the camera is required!"
+        );
         return;
       }
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(
-        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
-      );
-      await recording.startAsync();
-      setRecording(recording);
+
+      let cameraResult = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 1,
+      });
+
+      console.log("Camera result:", cameraResult);
+
+      if (
+        !cameraResult.canceled &&
+        cameraResult.assets &&
+        cameraResult.assets[0].uri
+      ) {
+        setImage(cameraResult.assets[0].uri);
+        setImageSelected(true);
+        console.log("Image taken:", cameraResult.assets[0].uri);
+      } else {
+        console.log("Camera was canceled or no valid image URI found.");
+      }
     } catch (error) {
-      console.error("Failed to record:", error);
+      console.error("Error taking image:", error.message);
+      Alert.alert("Error", "Failed to take photo");
     }
   }
 
-  async function stopRecording() {
+  // Pick and create an image from gallery and store it in expo before uploading to firebase
+  async function pickImage() {
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setAudio(uri);
-      setRecording(null);
-      Alert.alert("Recording saved!");
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permissionResult.granted === false) {
+        Alert.alert(
+          "Permission required",
+          "Permission to access gallery is required!"
+        );
+        return;
+      }
+      // Restrict to images only
+      let pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 1,
+      });
+
+      // Log the picker result to debug
+      console.log("Picker result:", pickerResult);
+
+      if (
+        !pickerResult.canceled &&
+        pickerResult.assets &&
+        pickerResult.assets[0].uri
+      ) {
+        // Extract image URI properly
+        setImage(pickerResult.assets[0].uri);
+        // Set image selected to true
+        setImageSelected(true);
+        console.log("Image picked:", pickerResult.assets[0].uri);
+      } else {
+        console.log("Image picker was canceled or no valid image URI found.");
+      }
     } catch (error) {
-      console.error("Failed to stop recording:", error);
+      console.error("Error picking image:", error.message);
+      Alert.alert("Error", "Failed to pick image");
     }
   }
 
-  async function uploadAudio(noteId) {
-    if (!audio) return null;
-    setUploading(true);
+  // Upload image to Firebase Storage
+  async function uploadImage(noteKey) {
+    try {
+      if (!image) {
+        console.error("No image selected for upload.");
+        return null;
+      }
+      // showing loader
+      setUploading(true);
+      console.log("Uploading image...");
+      const imgRef = storageRef(storage, `notes/${noteKey}.jpg`);
+      // Testing URI is valid and fetchable
+      const response = await fetch(image);
+      const blob = await response.blob();
 
-    const audioRef = storageRef(storage, `notes/${noteId}-audio.m4a`);
-    const response = await fetch(audio);
-    const blob = await response.blob();
-    await uploadBytes(audioRef, blob);
+      // Upload the image to Firebase Storage
+      await uploadBytes(imgRef, blob);
 
-    const url = await getDownloadURL(audioRef);
-    setUploading(false);
-    return url;
+      // Download URL for the uploaded image
+      const url = await getDownloadURL(imgRef);
+      console.log("Image uploaded, download URL:", url);
+      setUploading(false);
+      return url;
+    } catch (error) {
+      // Stop loader if upload fails
+      setUploading(false);
+      console.error("Error uploading image:", error.message);
+      Alert.alert("Error", "Failed to upload image");
+      return null;
+    }
   }
 
-  async function uploadImage(noteId) {
-    if (!image) return null;
-    setUploading(true);
-
-    const imgRef = storageRef(storage, `notes/${noteId}.jpg`);
-    const response = await fetch(image);
-    const blob = await response.blob();
-    await uploadBytes(imgRef, blob);
-
-    const url = await getDownloadURL(imgRef);
-    setUploading(false);
-    return url;
-  }
-
+  // Add note and upload image
   async function handleAddNote() {
-    if (!note.trim()) {
-      Alert.alert("Note cannot be empty");
+    if (note.trim() === "") {
+      Alert.alert("Error", "Note cannot be empty");
       return;
     }
 
     try {
-      const globalNotesRef = collection(firestoreDB, "notes");
+      // Add new note to Firebase
+      const notesRef = ref(database, "notes");
+      const newNoteRef = push(notesRef, { text: note });
 
-      const highestPosition = notes.length
-        ? Math.max(...notes.map((n) => n.position))
-        : -1;
+      if (image) {
+        const imageUrl = await uploadImage(newNoteRef.key);
 
-      const newNoteRef = await addDoc(globalNotesRef, {
-        text: note,
-        imageUrl: null,
-        audioUrl: null,
-        createdAt: new Date(),
-        owner: userId,
-        Participants: [userId],
-        position: highestPosition + 1,
-      });
-
-      const imageUrl = await uploadImage(newNoteRef.id);
-      const audioUrl = await uploadAudio(newNoteRef.id);
-
-      if (imageUrl || audioUrl) {
-        await updateDoc(doc(firestoreDB, `notes/${newNoteRef.id}`), {
-          imageUrl,
-          audioUrl,
-        });
+        if (imageUrl) {
+          // Update note with image URL
+          await update(ref(database, `notes/${newNoteRef.key}`), { imageUrl });
+          console.log("Note updated with image URL:", imageUrl);
+        }
       }
 
-      const userSharedRef = collection(
-        firestoreDB,
-        `users/${userId}/sharedNotes`
-      );
-      await addDoc(userSharedRef, { noteId: newNoteRef.id });
-
-      setNotes([
-        ...notes,
-        {
-          id: newNoteRef.id,
-          text: note,
-          imageUrl,
-          audioUrl,
-          position: highestPosition + 1,
-        },
-      ]);
       setNote("");
       setImage(null);
-      setAudio(null);
-      Alert.alert("Note added successfully!");
+      // Reset image selected state
+      setImageSelected(false);
+      Alert.alert("Success", "Note added successfully!");
     } catch (error) {
-      Alert.alert("Error adding note", error.message);
+      console.error("Error adding note:", error.message);
+      Alert.alert("Error", "Failed to add note");
     }
   }
 
+<<<<<<< Updated upstream
+  // Load notes from Firebase Realtime Database
+  function loadNotes() {
+    const notesRef = ref(database, "notes");
+    onValue(
+      notesRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        const loadedNotes = data
+          ? Object.entries(data).map(([key, value]) => ({
+              id: key,
+              text: value.text,
+              imageUrl: value.imageUrl || null,
+            }))
+          : [];
+        setNotes(loadedNotes);
+        console.log("Notes loaded:", loadedNotes);
+      },
+      (error) => {
+        console.error("Error loading notes:", error.message);
+        Alert.alert("Error", "Failed to load notes");
+=======
   function handlePressNote(noteId) {
     const path = "/note/" + noteId;
     router.push(path);
@@ -331,6 +243,7 @@ const FirstRoute = () => {
           const sortedNotes = loadedNotes.sort(
             (a, b) => a.position - b.position || a.createdAt - b.createdAt
           );
+          console.log(sortedNotes);
           setNotes(sortedNotes);
         });
       });
@@ -482,118 +395,104 @@ const SecondRoute = () => {
         loadSharedNotes(user.uid);
       } else {
         router.push("/login/LoginScreen");
+>>>>>>> Stashed changes
       }
-    });
-
-    return () => {
-      unsubscribeAuth();
-    };
-  }, [router]);
-
-  function handlePressNote(noteId) {
-    const path = "/note/" + noteId;
-    router.push(path);
+    );
   }
 
-  const onRefresh = useCallback(() => {
-    if (userId) {
-      setRefreshing(true);
-      loadSharedNotes(userId).then(() => setRefreshing(false));
-    } else {
-      setRefreshing(false);
-    }
-  }, [userId]);
+  // Handle note click (navigate to detailed view)
+  function handlePressNote(noteId) {
+    router.push(`/note/${noteId}`);
+  }
 
-  const loadSharedNotes = async (userId) => {
-    try {
-      const globalNotesRef = collection(firestoreDB, "notes");
-      const querySnapshot = await getDocs(globalNotesRef);
-
-      const loadedSharedNotes = querySnapshot.docs
-        .map((doc) => {
-          const note = doc.data();
-          const noteId = doc.id;
-          // Check if the user is part of the participants and is not the owner
-          if (note.Participants.includes(userId) && note.owner !== userId) {
-            return { id: noteId, ...note };
-          }
-          return null;
-        })
-        .filter(Boolean);
-
-      setSharedNotes(loadedSharedNotes);
-    } catch (error) {
-      Alert.alert("Failed to load shared notes", error.message);
-    }
-  };
-
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.noteContainer}
-      onPress={() => handlePressNote(item.id)}
-    >
-      <Text style={styles.noteText}>{item.text}</Text>
-      {item.imageUrl && (
-        <Image source={{ uri: item.imageUrl }} style={styles.noteImage} />
-      )}
-      {item.audioUrl && (
-        <Button
-          title="Play Audio"
-          onPress={async () => {
-            const { sound } = await Audio.Sound.createAsync({
-              uri: item.audioUrl,
-            });
-            await sound.playAsync();
-          }}
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.textInput}
+          value={note}
+          onChangeText={setNote}
+          placeholder="Enter your note here"
         />
-      )}
-    </TouchableOpacity>
-  );
 
-  return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container2}>
-        <Text style={styles.title}>Shared Notes</Text>
-        <View style={styles.flatListContainer}>
-          <FlatList
-            data={sharedNotes}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#0000ff"]}
-                tintColor="#0000ff"
-              />
-            }
-          />
-        </View>
-      </SafeAreaView>
-    </GestureHandlerRootView>
-  );
-};
+        <Button title="Pick an image" onPress={pickImage} />
 
-const renderScene = SceneMap({
-  first: FirstRoute,
-  second: SecondRoute,
-});
+        <Button title="Take a photo" onPress={takeImage} />
 
-export default function NoteTakingApp() {
-  const layout = useWindowDimensions();
-  const [index, setIndex] = React.useState(0);
+        {image && <Image source={{ uri: image }} style={styles.imagePreview} />}
 
-  const routes = [
-    { key: "first", title: "Personal notes" },
-    { key: "second", title: "Shared with me" },
-  ];
+        {/* Displaying selected image info */}
+        {imageSelected && (
+          <Text style={styles.imageSelectedText}>Image selected</Text>
+        )}
 
-  return (
-    <TabView
-      navigationState={{ index, routes }}
-      renderScene={renderScene}
-      onIndexChange={setIndex}
-      initialLayout={{ width: layout.width }}
-    />
+        {/* Show activity indicator when uploading */}
+        {uploading && <ActivityIndicator size="small" color="#0000ff" />}
+
+        <Button title="Add Note" onPress={handleAddNote} />
+      </View>
+
+      <FlatList
+        data={notes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity onPress={() => handlePressNote(item.id)}>
+            <View style={styles.noteContainer}>
+              <Text style={styles.noteText}>{item.text}</Text>
+              {item.imageUrl && (
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  style={styles.noteImage}
+                />
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    marginTop: 100,
+    flex: 1,
+    backgroundColor: "#F5F5F5",
+    padding: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  textInput: {
+    height: 40,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  noteContainer: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ddd",
+  },
+  noteText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  imagePreview: {
+    width: 100,
+    height: 100,
+    marginVertical: 10,
+  },
+  imageSelectedText: {
+    color: "green",
+    marginBottom: 10,
+    fontWeight: "bold",
+  },
+  noteImage: {
+    width: 100,
+    height: 100,
+    marginTop: 10,
+  },
+});

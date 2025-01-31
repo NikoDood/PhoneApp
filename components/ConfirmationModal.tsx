@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confirmButton: {
-    backgroundColor: "#ff0000", // Red color for delete button
+    backgroundColor: "#ff0000",
   },
   buttonText: {
     color: "#fff",
